@@ -121,6 +121,10 @@ export class IntakeService {
     await this.runGuard(c);
   }
 
+  async getScenario(): Promise<ScenarioId> {
+    return (await this.repo.getSetting<ScenarioId>('scenario')) ?? 'baseline';
+  }
+
   async getClock(): Promise<Clock> {
     const c = await this.repo.getClock();
     if (!c) throw new Error('NOT_INITIALIZED');

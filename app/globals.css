@@ -1,2 +1,55 @@
-:root { color-scheme: light; font-family: system-ui, -apple-system, 'Malgun Gothic', sans-serif; }
-body { margin: 0; padding: 16px; line-height: 1.5; }
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d9dde5; --card: #f5f7fa;
+  --red: #b42318; --red-bg: #fde8e6; --amber: #8a5300; --amber-bg: #fff1d6; --green: #0f6b3a; --green-bg: #dff5e8;
+  --blue: #1849a9; --blue-bg: #e1ecff; --accent: #1849a9;
+  font-family: system-ui, -apple-system, 'Malgun Gothic', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171f; --fg: #e8eaf0; --muted: #a3abbb; --line: #333a49; --card: #1c212c;
+    --red: #ffb4ab; --red-bg: #4a1f1b; --amber: #ffd591; --amber-bg: #44300f; --green: #8ee6b0; --green-bg: #163a28;
+    --blue: #a9c7ff; --blue-bg: #1c2f55; --accent: #a9c7ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); line-height: 1.55; }
+a { color: var(--accent); }
+main, .top, .meta-bar { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+main { padding-bottom: 48px; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.top nav { display: flex; gap: 16px; flex: 1; }
+.meta, p.meta { color: var(--muted); font-size: 0.9rem; max-width: 1200px; margin: 8px auto; padding: 0 16px; }
+main .meta { padding: 0; margin: 8px 0; }
+h1 { font-size: 1.5rem; margin: 20px 0 12px; }
+h2 { font-size: 1.15rem; margin: 28px 0 10px; }
+h3 { font-size: 1rem; margin: 0 0 6px; }
+small { color: var(--muted); font-weight: normal; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+td.num { text-align: right; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+tr.mine { background: var(--blue-bg); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.78rem; margin: 0 4px 2px 0; border: 1px solid var(--line); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-blue { background: var(--blue-bg); color: var(--blue); }
+.flash { padding: 10px 14px; border-radius: 8px; margin: 12px 0; border: 1px solid var(--line); }
+.flash-error { background: var(--red-bg); color: var(--red); }
+.flash-warn { background: var(--amber-bg); color: var(--amber); }
+.flash-ok { background: var(--green-bg); color: var(--green); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.card, .card-block { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--fg); text-decoration: none; }
+.card-block { margin: 12px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 12px 0; }
+.grid > div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+dl { margin: 0; } dt { color: var(--muted); font-size: 0.82rem; margin-top: 6px; } dd { margin: 0; }
+form.inline, .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+form.hold { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin: 10px 0; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
+label { display: inline-flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--muted); }
+input, select, button { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+button { cursor: pointer; background: var(--accent); color: var(--bg); border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+blockquote { margin: 8px 0; padding: 8px 12px; border-left: 4px solid var(--line); background: var(--card); }
+@media (max-width: 600px) { .top nav { flex-basis: 100%; } th, td { padding: 6px 4px; } }

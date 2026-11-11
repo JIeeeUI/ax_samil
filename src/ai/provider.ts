@@ -4,7 +4,7 @@ export interface AiProvider { complete(prompt: string): Promise<string> }
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 
 export function createProvider(
-  env: { ANTHROPIC_API_KEY?: string; ANTHROPIC_MODEL?: string },
+  env: Record<string, string | undefined>,
   fetchImpl: typeof fetch = fetch,
 ): AiProvider | null {
   const key = env.ANTHROPIC_API_KEY;
