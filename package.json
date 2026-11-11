@@ -8,7 +8,8 @@
     "intake": "tsx scripts/intake.ts",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -H 0.0.0.0"
+    "start": "next start -H 0.0.0.0",
+    "demo": "tsx scripts/demo.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
