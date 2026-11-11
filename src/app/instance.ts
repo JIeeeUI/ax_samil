@@ -13,6 +13,9 @@ export function getService(): Promise<IntakeService> {
     const svc = new IntakeService({ repo, room: loadDataRoom() });
     await svc.ensureInitialized();
     return svc;
-  })();
+  })().catch((e) => {
+    g.__intakeService = undefined; // 실패를 캐시하지 않는다(다음 요청에서 다시 시도)
+    throw e;
+  });
   return g.__intakeService;
 }

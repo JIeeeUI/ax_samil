@@ -50,11 +50,18 @@ export default async function Requests({
             {draftOut && draftReq?.id === q.id && (
               <blockquote>{draftOut.text} {draftOut.source === 'ai' ? <Badge tone="blue">AI</Badge> : <Badge>템플릿</Badge>} {draftOut.note && <small>{draftOut.note}</small>}</blockquote>
             )}
+            {q.caseId === 'CONTRACT-INF-001' ? (
             <div className="actions">
               {preset('유리한 회신(모의): 9/30 지급', '2026-09-30', '유리한 회신(모의): 고정 피는 2026-09-30에 지급합니다.')}
               {preset('불리한 회신(모의): 8/10 지급', '2026-08-10', '불리한 회신(모의): 고정 피는 2026-08-10에 지급합니다.')}
               {preset('지연 회신(모의): 일정 미정', null, '지연 회신(모의): 지급 일정은 아직 미정입니다.')}
             </div>
+            ) : null}
+            <form action={actReply} className="inline">
+              <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" /><input type="hidden" name="resolved" value="1" />
+              <label>값이 필요 없는 회신(예: 추가 자료) <input name="text" size={36} required /></label>
+              <button type="submit">회신 완료(보류 해제·재판정)</button>
+            </form>
             <form method="get" action="/requests" className="inline">
               <input type="hidden" name="req" value={q.id} />
               <label>회신 원문 <input name="text" size={48} defaultValue={req && String(q.id) === req ? text : ''} placeholder="예: 지급일은 2026-08-10입니다" /></label>

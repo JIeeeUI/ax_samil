@@ -51,7 +51,7 @@ export async function actReply(fd: FormData) {
   const fee = num(field(fd, 'fee'));
   const values = { ...(date ? { cashOutflowDate: date } : {}), ...(fee !== undefined ? { annualFixedFeeKrw: fee } : {}) };
   const hasValues = Object.keys(values).length > 0;
-  return done(fd, await (await cmd()).reply(Number(field(fd, 'requestId')), field(fd, 'text'), hasValues ? values : undefined, true));
+  return done(fd, await (await cmd()).reply(Number(field(fd, 'requestId')), field(fd, 'text'), hasValues ? values : undefined, true, field(fd, 'resolved') === '1'));
 }
 
 export async function actProposeChange(fd: FormData) {

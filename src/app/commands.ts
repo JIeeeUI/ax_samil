@@ -31,8 +31,8 @@ export function commands(svc: IntakeService) {
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),
     close: (id: string, role: Actor) => attempt(() => svc.close(id, role)),
-    reply: (requestId: number, text: string, values: ReplyValues | undefined, simulated: boolean) =>
-      attempt(() => svc.replyInfoRequest(requestId, { text, values, simulated })),
+    reply: (requestId: number, text: string, values: ReplyValues | undefined, simulated: boolean, resolved = false) =>
+      attempt(() => svc.replyInfoRequest(requestId, { text, values, simulated, resolved })),
     proposeChange: (fee: number, cashOutflowDate?: IsoDate | null) =>
       attempt(() => svc.proposeContractChange({ annualFixedFeeKrw: fee, cashOutflowDate })),
     advanceClock: (to: IsoDate) => attempt(() => svc.advanceClock(to)),

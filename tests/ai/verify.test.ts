@@ -25,3 +25,12 @@ test('rounding tolerance, percentages, ids and stage names', () => {
   expect(verifyFacts('반품률 42.8%', facts([0.428])).ok).toBe(true);
   expect(verifyFacts('PLAN-007과 CONTRACT-INF-001은 D-3 알림', facts([])).ok).toBe(true);
 });
+
+test('final #6: near misses, hangul numerals and month-day phrases are not accepted', () => {
+  const f = { numbers: [2_800_000_000, 7, 30], dates: [] as string[] };
+  expect(verifyFacts('고정 피 28.1억 원', f).ok).toBe(false);
+  expect(verifyFacts('1천억 원', f).ok).toBe(false);
+  expect(verifyFacts('이십팔억 원', f).ok).toBe(false);
+  expect(verifyFacts('7월 30일까지', f).ok).toBe(false);
+  expect(verifyFacts('고정 피 28억 원', f).ok).toBe(true);
+});

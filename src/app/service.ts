@@ -100,7 +100,8 @@ export class IntakeService {
 
   // ---------- 초기화·시계 ----------
   async ensureInitialized(): Promise<void> {
-    if (!(await this.repo.getClock())) await this.reset();
+    // 시계만 있고 건이 없으면 초기화가 도중에 끊긴 것이므로 다시 시작한다.
+    if (!(await this.repo.getClock()) || (await this.repo.listStates()).length === 0) await this.reset();
   }
 
   async reset(): Promise<void> {
@@ -135,8 +136,8 @@ export class IntakeService {
     if (!isIsoDate(to)) throw new Error(`INVALID_DATE: ${String(to)}`);
     const clock = await this.getClock();
     if (to < clock.today) throw new Error(`CLOCK_BACKWARDS: 업무 시계는 ${clock.today}에서 ${to}로 되돌릴 수 없습니다`);
-    if (to === clock.today) return { raised: [] };
-    await this.repo.setClock({ ...clock, today: to });
+    // 같은 날 재호출도 가드를 다시 돌린다(알림·기한 경과 처리는 멱등이라 중복되지 않고, 도중 실패한 날의 처리를 이어 준다).
+    if (to !== clock.today) await this.repo.setClock({ ...clock, today: to });
     return { raised: await this.runGuard(await this.compute()) };
   }
 
@@ -151,7 +152,8 @@ export class IntakeService {
       const stages = stagesDue(today, k.effectiveDeadline);
       if (stages.includes('overdue')) {
         const next = transition({ status, routeLevel: st.routeLevel as RouteLevel }, 'expire', 'system');
-        await this.repo.upsertState({ ...st, status: next, updatedBusinessDate: today });
+        if (!(await this.repo.transitionState(st.caseId, st.status, { status: next, routeLevel: st.routeLevel, updatedBusinessDate: today }))) continue;
+        await this.closeOpenRequests(st.caseId);
         await this.log(c, st.caseId, 'system', 'expire', {
           detail: { message: '기한 경과(자동 확정)', executesBeforeDeadline: k.executesBeforeDeadline }, simulated: false,
         });
@@ -213,6 +215,11 @@ export class IntakeService {
     if (!k) throw new Error(`UNKNOWN_CASE: ${id}`);
     const item = this.buildItems(c, sm).find((i) => i.id === id)!;
     const route = c.routes.get(id)!;
+    const events = await this.repo.listEvents(id);
+    // 종결된 건은 결정 당시의 근거를 보여 준다(이후 가정이 바뀌어도 화면이 모순되지 않게).
+    const frozen = TERMINAL.has(item.status)
+      ? [...events].reverse().map((e) => e.snapshot as { reasons?: string[] } | null).find((sn) => sn?.reasons)
+      : undefined;
     const alerts = await this.repo.listAlerts(id);
     const esc = alerts.find((a) => a.kind === 'escalation');
     const notes: string[] = [];
@@ -222,13 +229,20 @@ export class IntakeService {
     }
     if (k.executesBeforeDeadline) notes.push(`확정 전 집행 예정: 집행 예정일 ${k.settlementDate}이 확정기한 ${k.deadline}보다 빠릅니다.`);
     return {
-      item, row: c.intake.find((r) => r.제안ID === id)!, reasons: route.reasons, needsInfo: route.needsInfo,
-      events: await this.repo.listEvents(id), requests: await this.repo.listInfoRequests({ caseId: id }),
+      item, row: c.intake.find((r) => r.제안ID === id)!, reasons: frozen?.reasons ?? route.reasons,
+      needsInfo: frozen ? [] : route.needsInfo, events, requests: await this.repo.listInfoRequests({ caseId: id }),
       group: c.cases.filter((x) => x.linkGroup === k.linkGroup).map((x) => ({ id: x.id, kind: x.kind, status: sm.get(x.id)!.status })),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([key, v]) => [key, v.status]))).filter((w) => w.influencerId === k.linkGroup),
       notes, penalty: k.kind === 'contract' ? terminationPenalty(k.amount, '2026-09-01') : null,
       escalation: esc ? ESCALATION_OPTIONS : null, alerts,
     };
+  }
+
+  /** 종결된 건에 남은 열린 확인 요청을 닫는다. */
+  private async closeOpenRequests(caseId: string): Promise<void> {
+    for (const q of await this.repo.listInfoRequests({ status: 'requested', caseId })) {
+      await this.repo.updateInfoRequest(q.id, { status: 'closed' });
+    }
   }
 
   // ---------- 상태 변경 ----------
@@ -237,7 +251,9 @@ export class IntakeService {
     const st = await this.requireState(id);
     const next = transition(st, action, actor, { today: c.clock.today, hold: opts.hold });
     const level = opts.rejudge ? c.routes.get(id)!.level : st.routeLevel;
-    await this.repo.upsertState({ caseId: id, status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
+    const ok = await this.repo.transitionState(id, st.status, { status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
+    if (!ok) throw new Error(`INVALID_TRANSITION: ${id}은(는) 방금 다른 요청으로 ${action}이(가) 처리되었습니다`);
+    if (TERMINAL.has(next)) await this.closeOpenRequests(id);
     await this.log(c, id, actor, action, { detail: opts.hold });
     return c;
   }
@@ -302,10 +318,12 @@ export class IntakeService {
     await this.ensureInfoRequests(c, CONTRACT_ID, true);
   }
 
-  async replyInfoRequest(requestId: number, input: { text: string; values?: ReplyValues; simulated: boolean }): Promise<void> {
+  async replyInfoRequest(requestId: number, input: { text: string; values?: ReplyValues; simulated: boolean; resolved?: boolean }): Promise<void> {
     const req = await this.repo.getInfoRequest(requestId);
     if (!req) throw new Error(`UNKNOWN_REQUEST: ${requestId}`);
     if (req.status !== 'requested') throw new Error(`REQUEST_NOT_OPEN: ${requestId}은(는) ${req.status} 상태`);
+    const caseState = await this.requireState(req.caseId);
+    if (TERMINAL.has(caseState.status)) throw new Error(`CASE_CLOSED: ${req.caseId}은(는) ${caseState.status} 상태라 회신을 반영할 수 없습니다`);
     const v = input.values ?? {};
     if (v.cashOutflowDate !== undefined && !isIsoDate(v.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
     if (v.annualFixedFeeKrw !== undefined && (!Number.isInteger(v.annualFixedFeeKrw) || v.annualFixedFeeKrw <= 0)) {
@@ -313,6 +331,20 @@ export class IntakeService {
     }
     const hasValues = v.cashOutflowDate !== undefined || v.annualFixedFeeKrw !== undefined;
     const c0 = await this.compute();
+    if (!hasValues && input.resolved) {
+      // 구조화 값이 필요 없는 요청(예: 추가 자료)은 회신 완료로 풀어 준다.
+      await this.repo.updateInfoRequest(requestId, { status: 'replied', replyText: input.text, repliedDate: c0.clock.today, simulated: input.simulated });
+      const st0 = await this.requireState(req.caseId);
+      if (st0.status === 'on_hold') {
+        const owner: Actor = isRole(req.ownerRole) ? req.ownerRole : 'finance';
+        const next = transition(st0, 'reply', owner);
+        await this.repo.transitionState(req.caseId, 'on_hold', { status: next, routeLevel: c0.routes.get(req.caseId)!.level, updatedBusinessDate: c0.clock.today });
+      }
+      await this.log(c0, req.caseId, isRole(req.ownerRole) ? req.ownerRole : 'finance', 'reply', {
+        simulated: input.simulated, detail: { resolved: true, text: input.text },
+      });
+      return;
+    }
     if (!hasValues) {
       await this.repo.updateInfoRequest(requestId, { replyText: input.text, simulated: input.simulated });
       await this.log(c0, req.caseId, req.ownerRole as Actor, 'reply_pending', { simulated: input.simulated, detail: { text: input.text } });
@@ -348,7 +380,7 @@ export class IntakeService {
   async setScenario(id: ScenarioId): Promise<void> {
     if (!(id in SCENARIOS)) throw new Error(`UNKNOWN_SCENARIO: ${id}`);
     const prev = (await this.repo.getSetting<ScenarioId>('scenario')) ?? 'baseline';
-    if (prev === id) return;
+    // 같은 시나리오여도 재판정은 멱등이라 다시 돌린다(도중 실패 후 재시도로 누락을 메운다).
     await this.repo.setSetting('scenario', id);
     const c = await this.compute();
     for (const caseId of await this.rejudge(c)) {

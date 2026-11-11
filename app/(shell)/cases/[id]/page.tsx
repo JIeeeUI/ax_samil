@@ -63,7 +63,7 @@ export default async function CasePage({
         <div><h3>현금·승인 판정</h3><dl>
           <dt>하회 구간</dt><dd>{r.하회구간}</dd>
           <dt>현금 유출일이 구간 안?</dt><dd>{r.하회구간해당}</dd>
-          <dt>경로</dt><dd>{r.승인경로}</dd>
+          <dt>경로</dt><dd>{i.routeLabel}</dd>
           <dt>근거</dt><dd>{d.reasons.join(' / ')}</dd>
           {d.needsInfo.length > 0 && <><dt>필요 정보</dt><dd>{d.needsInfo.join(', ')}</dd></>}
         </dl></div>

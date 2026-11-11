@@ -72,6 +72,14 @@ export class Repo {
        on conflict (case_id) do update set status = $2, route_level = $3, updated_business_date = $4`,
       [s.caseId, s.status, s.routeLevel, s.updatedBusinessDate]);
   }
+  /** 기대한 상태일 때만 갱신한다(동시 요청의 이중 처리 방지). 갱신했으면 true. */
+  async transitionState(caseId: string, expected: string, s: { status: string; routeLevel: string; updatedBusinessDate: IsoDate }): Promise<boolean> {
+    const r = await this.db.query(
+      `update case_state set status = $3, route_level = $4, updated_business_date = $5
+       where case_id = $1 and status = $2 returning case_id`,
+      [caseId, expected, s.status, s.routeLevel, s.updatedBusinessDate]);
+    return r.length > 0;
+  }
   async getState(caseId: string): Promise<StateRow | null> {
     const r = await this.db.query<RawState>('select * from case_state where case_id = $1', [caseId]);
     return r[0] ? toState(r[0]) : null;
