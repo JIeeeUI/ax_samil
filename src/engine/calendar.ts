@@ -25,6 +25,13 @@ export function nextBusinessDay(d: IsoDate): IsoDate {
   return x;
 }
 
+/** d보다 앞선 가장 가까운 영업일. */
+export function previousBusinessDay(d: IsoDate): IsoDate {
+  let x = addDays(d, -1);
+  while (!isBusinessDay(x)) x = addDays(x, -1);
+  return x;
+}
+
 /** from~to(양 끝 포함) 사이의 영업일. */
 export function businessDaysInRange(from: IsoDate, to: IsoDate): IsoDate[] {
   const out: IsoDate[] = [];

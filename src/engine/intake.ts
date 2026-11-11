@@ -62,12 +62,12 @@ export function buildIntake(room: DataRoom, a: AssumptionSet, today: IsoDate = a
   const campNominalRank = rankDesc(camps, (c) => c.nominalRoas, (c) => c.campaignId);
   const campRealRank = rankDesc(camps, (c) => c.realRoas, (c) => c.campaignId);
   const infNominalRank = rankDesc(infs, (i) => i.nominalRoas, (i) => i.influencerId);
-  const window = cash.breach ? `${cash.breach.start}~${cash.breach.end}` : '없음';
+  const window = cash.breaches.length === 0 ? '없음' : cash.breaches.map((b) => `${b.start}~${b.end}`).join(', ');
 
   const rows = cases.map((k): IntakeRow => {
     const inf = infById.get(k.influencerId)!;
     const camp = k.campaignId ? campById.get(k.campaignId)! : null;
-    const route = routeCase(k, { breach: cash.breach, planTotal: total });
+    const route = routeCase(k, { breaches: cash.breaches, planTotal: total });
     const codes = issues
       .filter((i) => i.targetId === k.id || i.targetId === k.influencerId || (camp && i.targetId === camp.campaignId))
       .map((i) => i.code);
@@ -95,7 +95,7 @@ export function buildIntake(room: DataRoom, a: AssumptionSet, today: IsoDate = a
       요청비중: r3(inf.requestShare),
       기존집행비중: r3(inf.spendShare),
       하회구간: window,
-      하회구간해당: k.cashOutflowDate === null ? '미확인' : outflowInBreach(k.cashOutflowDate, cash.breach) ? '예' : '아니오',
+      하회구간해당: k.cashOutflowDate === null ? '미확인' : outflowInBreach(k.cashOutflowDate, cash.breaches) ? '예' : '아니오',
       승인경로: ROUTE_LABEL[route.level],
       판정근거: route.reasons.join(' / '),
       필요정보: route.needsInfo.join(';'),

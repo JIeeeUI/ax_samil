@@ -14,7 +14,7 @@ const day = (r: ReturnType<typeof simulateCash>, d: string) => r.daily.find((x) 
 test('#1 contract above 10억 with unknown outflow still asks for the outflow date', () => {
   const cases = buildCases(room);
   const c = cases.find((x) => x.kind === 'contract')!;
-  expect(routeCase(c, { breach: base.breach, planTotal: planTotal(cases) }))
+  expect(routeCase(c, { breaches: base.breaches, planTotal: planTotal(cases) }))
     .toMatchObject({ level: 'CEO_BOARD', needsInfo: ['cash_outflow_date'] });
   const row = buildIntake(room, DEFAULT_ASSUMPTIONS).find((r) => r.제안ID === 'CONTRACT-INF-001')!;
   expect(row.필요정보).toBe('cash_outflow_date');
@@ -34,11 +34,11 @@ test('#3 AP row whose po_id is not in the PO file is counted as an outflow', () 
 });
 
 test('#4 weekend outflow rolls to Monday before the breach check', () => {
-  const breach = { start: '2026-07-20', end: '2026-07-31', businessDays: 10 };
-  expect(outflowInBreach('2026-07-18', breach)).toBe(true); // 토 → 월 7/20
+  const breaches = [{ start: '2026-07-20', end: '2026-07-31', businessDays: 10 }];
+  expect(outflowInBreach('2026-07-18', breaches)).toBe(true); // 토 → 월 7/20
   const cases = buildCases(room);
   const p = { ...cases.find((c) => c.id === 'PLAN-022')!, cashOutflowDate: '2026-07-18', amount: 5000000 };
-  expect(routeCase(p, { breach, planTotal: 1 }).level).toBe('CEO_BOARD');
+  expect(routeCase(p, { breaches, planTotal: 1 }).level).toBe('CEO_BOARD');
 });
 
 test('#7 zero requested amount gives blank expected ROAS, not Infinity', () => {

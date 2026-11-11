@@ -1,11 +1,17 @@
 import { THRESHOLDS, type AssumptionSet } from './assumptions.js';
-import { addDays, businessDaysInRange, nextBusinessDay } from './calendar.js';
+import { addDays, businessDaysInRange, nextBusinessDay, previousBusinessDay } from './calendar.js';
 import type { FullTables, IsoDate } from './types.js';
+
+/** 연속된 하회 영업일 한 구간 (주말은 연속을 끊지 않는다). */
+export interface BreachWindow { start: IsoDate; end: IsoDate; businessDays: number }
 
 export interface CashResult {
   opening: number;
+  /** 기초 잔액을 가져온 실적일(기준일 직전 영업일) */
+  openingDate: IsoDate;
   daily: { date: IsoDate; balance: number }[];
-  breach: { start: IsoDate; end: IsoDate; businessDays: number } | null;
+  /** 하회 구간들(없으면 빈 배열). 떨어진 구간은 합치지 않는다. */
+  breaches: BreachWindow[];
   minimum: { date: IsoDate; balance: number };
   /** 재무 공식 전망(fin_cash_forecast_ms)의 주간 예상 종가 최소값 — 대조용 */
   officialMinClosing: number;
@@ -47,27 +53,46 @@ export function simulateCash(full: FullTables, a: AssumptionSet, horizonEnd: Iso
     if (d) put(d, -p.amount_krw);
   }
 
-  const opening = full.cashDaily.at(-1)!.closing_balance;
+  // 기초 잔액 = 기준일 직전 영업일 종가. 실적이 그 날까지 없거나 기준일을 포함하면 실적과 예정이 어긋나므로 중단한다.
+  const lastActual = full.cashDaily.at(-1);
+  const wantDate = previousBusinessDay(asOf);
+  if (!lastActual || lastActual.date < wantDate || lastActual.date >= asOf) {
+    throw new Error(`기초 잔액 오류: 기준일 ${asOf}의 직전 영업일(${wantDate}) 종가가 필요하지만 마지막 실적일은 ${lastActual?.date ?? '없음'}입니다`);
+  }
+  const opening = lastActual.closing_balance;
+  const openingDate = lastActual.date;
   let balance = opening;
   const daily = businessDaysInRange(asOf, horizonEnd).map((date) => {
     balance += events.get(date) ?? 0;
     return { date, balance };
   });
 
-  const below = daily.filter((d) => d.balance < THRESHOLDS.covenantMinKrw);
-  const breach = below.length === 0 ? null : { start: below[0].date, end: below.at(-1)!.date, businessDays: below.length };
+  const breaches: BreachWindow[] = [];
+  // daily는 영업일만 담으므로, 바로 앞 영업일도 하회였을 때만 같은 구간으로 이어진다.
+  daily.forEach((d, i) => {
+    if (d.balance >= THRESHOLDS.covenantMinKrw) return;
+    const cont = i > 0 && daily[i - 1].balance < THRESHOLDS.covenantMinKrw;
+    if (cont) { const w = breaches.at(-1)!; w.end = d.date; w.businessDays += 1; }
+    else breaches.push({ start: d.date, end: d.date, businessDays: 1 });
+  });
   const minimum = daily.reduce((m, d) => (d.balance < m.balance ? d : m), daily[0]);
   const officialMinClosing = Math.min(...full.cashForecast.map((f) => f.projected_closing_krw));
-  return { opening, daily, breach, minimum, officialMinClosing };
+  return { opening, openingDate, daily, breaches, minimum, officialMinClosing };
 }
 
-export function isInBreach(date: IsoDate, breach: CashResult['breach']): boolean {
-  return breach !== null && date >= breach.start && date <= breach.end;
+export function isInBreach(date: IsoDate, breaches: BreachWindow[]): boolean {
+  return breaches.some((b) => date >= b.start && date <= b.end);
 }
 
-/** 현금 유출일이 하회 구간 안인지. 주말 유출은 다음 영업일에 실제로 나가므로 이월 후 판정한다. */
-export function outflowInBreach(date: IsoDate, breach: CashResult['breach']): boolean {
-  return isInBreach(nextBusinessDay(date), breach);
+/** 주말 유출은 다음 영업일에 실제로 나가므로 이월한 날짜가 속한 구간을 돌려준다. */
+export function breachWindowFor(date: IsoDate, breaches: BreachWindow[]): BreachWindow | null {
+  const d = nextBusinessDay(date);
+  return breaches.find((b) => d >= b.start && d <= b.end) ?? null;
+}
+
+/** 현금 유출일이 하회 구간 안인지. 주말 유출은 다음 영업일로 이월 후 판정한다. */
+export function outflowInBreach(date: IsoDate, breaches: BreachWindow[]): boolean {
+  return breachWindowFor(date, breaches) !== null;
 }
 
 /** 실적 구간 항등식(기초 + 유입 − 유출 = 기말)이 깨진 날만 반환. */

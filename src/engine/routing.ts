@@ -1,5 +1,5 @@
 import { THRESHOLDS } from './assumptions.js';
-import { outflowInBreach, type CashResult } from './cash.js';
+import { breachWindowFor, type BreachWindow } from './cash.js';
 import type { Case } from './cases.js';
 
 export type RouteLevel = 'CEO_BOARD' | 'MASIL_CEO_GROUP_REPORT' | 'MASIL_CEO' | 'MARKETING';
@@ -23,16 +23,17 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
  * 승인 경로 (approval_authority_policy, covenant_terms_ms). 위에서부터 적용, 먼저 걸리는 쪽 우선.
  * 경계를 넘는 결정은 자동 확정하지 않고 상신한다.
  */
-export function routeCase(c: Case, ctx: { breach: CashResult['breach']; planTotal: number }): Route {
+export function routeCase(c: Case, ctx: { breaches: BreachWindow[]; planTotal: number }): Route {
+  const hit = c.cashOutflowDate === null ? null : breachWindowFor(c.cashOutflowDate, ctx.breaches);
   if (c.kind === 'contract' && c.amount > THRESHOLDS.contractAnnualKrw) {
     return c.cashOutflowDate === null
       ? { level: 'CEO_BOARD', reasons: [`전속계약 연 ${won(c.amount)} > 10억 원`, '현금 유출일 미확인'], needsInfo: ['cash_outflow_date'] }
       : { level: 'CEO_BOARD', reasons: [`전속계약 연 ${won(c.amount)} > 10억 원`], needsInfo: [] };
   }
-  if (c.cashOutflowDate !== null && outflowInBreach(c.cashOutflowDate, ctx.breach)) {
+  if (hit) {
     return {
       level: 'CEO_BOARD',
-      reasons: [`현금 유출일 ${c.cashOutflowDate}이 covenant 하회 구간(${ctx.breach!.start}~${ctx.breach!.end}) 안`],
+      reasons: [`현금 유출일 ${c.cashOutflowDate}이 covenant 하회 구간(${hit.start}~${hit.end}) 안`],
       needsInfo: [],
     };
   }
