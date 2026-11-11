@@ -1,15 +1,12 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { parsePipeCsv } from './csv.js';
 import type { DataRoom } from './types.js';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-/** 원본 데이터룸 경로. 읽기 전용으로만 사용한다. */
+/** 원본 데이터룸 경로(저장소 루트 = 프로세스 작업 폴더 기준). 읽기 전용으로만 사용한다. */
 export function defaultDataDir(): string {
-  return process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(REPO_ROOT, '01_참가자_배포용', '04_원본데이터');
+  return process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(process.cwd(), '01_참가자_배포용', '04_원본데이터');
 }
 
 export interface TableSpec { file: string; numeric?: string[]; boolean?: string[] }
