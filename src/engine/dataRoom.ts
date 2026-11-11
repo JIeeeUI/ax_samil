@@ -12,7 +12,7 @@ export function defaultDataDir(): string {
   return process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(REPO_ROOT, '01_참가자_배포용', '04_원본데이터');
 }
 
-interface TableSpec { file: string; numeric?: string[]; boolean?: string[] }
+export interface TableSpec { file: string; numeric?: string[]; boolean?: string[] }
 
 const T = {
   campaigns: { file: '02_masil/master/m_campaign_ms.csv', numeric: ['attribution_window_days'] },
@@ -44,22 +44,26 @@ const HASHED_DOCS = [
   '02_masil/marketing/inf001_exclusive_contract_notice.md',
 ];
 
-function readTable(dataDir: string, spec: TableSpec): unknown[] {
-  const rows = parsePipeCsv(readFileSync(join(dataDir, spec.file), 'utf8'));
-  return rows.map((r) => {
+/** 숫자 칸 하나를 읽는다. NONE(null)은 null, 빈 칸·공백·비수치·무한대는 where를 담아 중단한다(0으로 읽지 않는다). */
+export function parseNumericCell(raw: string | null | undefined, where: string): number | null {
+  if (raw === null || raw === undefined) return null;
+  const n = raw.trim() === '' ? NaN : Number(raw);
+  if (!Number.isFinite(n)) throw new Error(`${where}: 숫자가 아닌 값 "${raw}"`);
+  return n;
+}
+
+/** 행 배열의 숫자·불리언 열을 변환한다. 오류 메시지에 파일·열·행 번호(1부터)를 담는다. */
+export function coerceRows(rows: Record<string, string | null | undefined>[], spec: TableSpec, file: string): unknown[] {
+  return rows.map((r, i) => {
     const out: Record<string, unknown> = { ...r };
-    for (const c of spec.numeric ?? []) {
-      const v = r[c];
-      if (v === null || v === undefined) out[c] = null;
-      else {
-        const n = Number(v);
-        if (Number.isNaN(n)) throw new Error(`${spec.file}: column ${c} is not numeric: ${v}`);
-        out[c] = n;
-      }
-    }
+    for (const c of spec.numeric ?? []) out[c] = parseNumericCell(r[c], `${file} ${c} 행 ${i + 1}`);
     for (const c of spec.boolean ?? []) out[c] = r[c] === 'True';
     return out;
   });
+}
+
+function readTable(dataDir: string, spec: TableSpec): unknown[] {
+  return coerceRows(parsePipeCsv(readFileSync(join(dataDir, spec.file), 'utf8')), spec, spec.file);
 }
 
 export function loadDataRoom(dataDir: string = defaultDataDir()): DataRoom {

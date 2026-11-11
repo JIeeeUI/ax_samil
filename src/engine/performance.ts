@@ -56,7 +56,8 @@ function accumulateByCampaign(room: PerfRoom, a: AssumptionSet): Map<string, Acc
     let productCost = k.product_cost_krw * a.unitsPerOrder;
     let fee = ((a.channelFeeBasis === 'gmv' ? g : g - r) * k.channel_fee_pct) / 100;
     if (a.recoverCostOnRefund && returned) { productCost = 0; fee = 0; }
-    let cp = g - r - productCost - fee - k.shipping_cost_krw * a.unitsPerOrder
+    // 출고 물류비는 주문 1건당 1번(반품 물류비와 같은 규칙). 수량에 비례하는 것은 제품원가뿐이다.
+    let cp = g - r - productCost - fee - k.shipping_cost_krw
       - (returned ? k.return_logistics_cost_krw : 0);
     if (a.calcMode === 'literal-calc-def') cp -= o.coupon_discount_krw + r;
     const x = acc.get(o.campaign_id) ?? { orders: 0, gmv: 0, refunds: 0, coupon: 0, cpBefore: 0 };
