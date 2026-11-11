@@ -8,6 +8,13 @@ export function addDays(d: IsoDate, n: number): IsoDate {
   return fromUtc(toUtc(d) + n * DAY_MS);
 }
 
+/** 실제 달력에 있는 YYYY-MM-DD 인지. */
+export function isIsoDate(s: unknown): s is IsoDate {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const ms = toUtc(s);
+  return !Number.isNaN(ms) && fromUtc(ms) === s;
+}
+
 /** 달력일 기준 (to − from). */
 export function daysBetween(from: IsoDate, to: IsoDate): number {
   return Math.round((toUtc(to) - toUtc(from)) / DAY_MS);

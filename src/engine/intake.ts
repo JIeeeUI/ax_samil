@@ -1,6 +1,6 @@
 import type { AssumptionSet } from './assumptions.js';
 import { daysBetween } from './calendar.js';
-import { buildCases, planTotal, alertStage } from './cases.js';
+import { buildCases, planTotal, alertStage, type ContractTerms } from './cases.js';
 import { outflowInBreach, simulateCash } from './cash.js';
 import { channelReturnBenchmark, evaluateIssues } from './issues.js';
 import { computeCampaignPerformance, computeInfluencerPerformance } from './performance.js';
@@ -48,10 +48,12 @@ function rankDesc<T>(items: T[], key: (t: T) => number | null, id: (t: T) => str
 }
 
 /** 제안 접수표: 기안 25건 + 전속계약 1건, 실효결정기한 오름차순. */
-export function buildIntake(room: DataRoom, a: AssumptionSet, today: IsoDate = a.asOf): IntakeRow[] {
+export function buildIntake(
+  room: DataRoom, a: AssumptionSet, today: IsoDate = a.asOf, contract: Partial<ContractTerms> = {},
+): IntakeRow[] {
   const camps = computeCampaignPerformance(room, a);
   const infs = computeInfluencerPerformance(room, a);
-  const cases = buildCases(room);
+  const cases = buildCases(room, contract);
   const cash = simulateCash(room.full, a);
   const total = planTotal(cases);
   const bench = channelReturnBenchmark(room);
