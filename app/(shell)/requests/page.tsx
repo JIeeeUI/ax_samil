@@ -8,6 +8,13 @@ import { Badge, Flash } from '../../components.js';
 
 export const dynamic = 'force-dynamic';
 
+const NEEDED_PLAIN: Record<string, string> = {
+  cash_outflow_date: '고정 비용이 실제로 나가는 날짜',
+  payment_schedule: '고정 비용 지급 일정',
+};
+const REQ_STATUS: Record<string, string> = { requested: '답변 기다리는 중', replied: '답변 받음', closed: '종료' };
+const CONTRACT = 'CONTRACT-INF-001';
+
 export default async function Requests({
   searchParams,
 }: { searchParams: Promise<{ error?: string; req?: string; text?: string; draft?: string }> }) {
@@ -15,73 +22,96 @@ export default async function Requests({
   const svc = await getService();
   const today = (await svc.getClock()).today;
   const v = await svc.listToday();
-  const ids = v.items.map((i) => i.id);
-  const all = (await Promise.all(ids.map((id) => svc.getCase(id).then((d) => d.requests)))).flat().sort((a, b) => a.id - b.id);
+  const name = new Map(v.items.map((i) => [i.id, i.influencer]));
+  const all = (await Promise.all(v.items.map((i) => svc.getCase(i.id).then((d) => d.requests)))).flat().sort((a, b) => a.id - b.id);
   const open = all.filter((r) => r.status === 'requested');
   const done = all.filter((r) => r.status !== 'requested');
   const ai = createProvider(process.env);
   const extracted = req && text ? await structureReply(text, ai) : null;
-  const draftDetail = draft ? await svc.getCase(all.find((r) => String(r.id) === draft)?.caseId ?? ids[0]) : null;
   const draftReq = draft ? all.find((r) => String(r.id) === draft) : null;
-  const draftOut = draftDetail && draftReq ? await draftInfoRequest(draftReq.needed, draftDetail, ai) : null;
+  const draftOut = draftReq ? await draftInfoRequest(draftReq.needed, await svc.getCase(draftReq.caseId), ai) : null;
 
   return (
     <>
       <Flash error={error} />
-      <h1>확인 요청함</h1>
-      <p className="meta">담당과 기한이 붙은 미확인 정보 요청입니다. 회신은 모두 <Badge tone="blue">모의</Badge>로 기록됩니다.</p>
-      {open.length === 0 && <p>열린 확인 요청이 없습니다.</p>}
+      <h1>확인 요청</h1>
+      <div className="flash flash-ok intro">
+        결재하는 사람이 “정보가 더 필요하다”며 보류하면 여기에 요청이 생겨요. 담당자가 답을 적으면 <strong>자동으로 다시 계산</strong>하고 다음 단계로 넘어갑니다.
+        <br /><small>지금 입력하는 답변은 모두 시연용(가상)으로 기록돼요.</small>
+      </div>
+
+      {open.length === 0 && <p>답을 기다리는 요청이 없습니다. 건 상세에서 “보류”를 누르면 여기에 생겨요.</p>}
       {open.map((q) => {
         const late = q.dueDate < today;
+        const isContractDate = q.caseId === CONTRACT && (q.needed === 'cash_outflow_date' || q.needed === 'payment_schedule');
+        const typed = req && String(q.id) === req ? text : '';
         const prefill = extracted && String(q.id) === req ? extracted.candidates : {};
         const preset = (label: string, date: string | null, msg: string) => (
           <form action={actReply} className="inline">
             <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" />
             <input type="hidden" name="text" value={msg} />{date && <input type="hidden" name="cashOutflowDate" value={date} />}
-            <button type="submit">{label}</button>
+            <button type="submit" className="secondary">{label}</button>
           </form>
         );
         return (
           <section key={q.id} className="card-block">
-            <h3>#{q.id} <Link href={`/cases/${q.caseId}`}>{q.caseId}</Link> · {q.needed} {late && <Badge tone="red">기한 초과</Badge>}</h3>
-            <p>담당 {isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole} · 회신 기한 {q.dueDate} · 요청일 {q.createdDate}{q.simulated && ' · 모의'}</p>
-            {q.replyText && <p className="meta">이전 회신(값 없음): {q.replyText}</p>}
-            <p><Link href={`/requests?draft=${q.id}`}>요청서 초안 보기</Link></p>
-            {draftOut && draftReq?.id === q.id && (
-              <blockquote>{draftOut.text} {draftOut.source === 'ai' ? <Badge tone="blue">AI</Badge> : <Badge>템플릿</Badge>} {draftOut.note && <small>{draftOut.note}</small>}</blockquote>
+            <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} ({q.caseId})</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
+            <p>
+              <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong>이(가) <strong>{q.dueDate}</strong>까지 답해야 해요.
+              {late && <> <Badge tone="red">기한이 지났어요</Badge></>}
+            </p>
+            {q.replyText && <p className="meta">앞서 받은 답변(필요한 값이 없어 계속 기다리는 중): {q.replyText}</p>}
+
+            {isContractDate ? (
+              <form action={actReply} className="hold">
+                <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" />
+                <label>돈이 나가는 날짜 <input type="date" name="cashOutflowDate" defaultValue={prefill.cashOutflowDate ?? ''} /></label>
+                <label>메모(선택) <input name="text" size={30} defaultValue={typed} placeholder="예: 8월 10일 지급 예정" /></label>
+                <button type="submit">답변 입력하고 다시 계산</button>
+              </form>
+            ) : (
+              <form action={actReply} className="hold">
+                <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" /><input type="hidden" name="resolved" value="1" />
+                <label>답변 내용 <input name="text" size={40} required defaultValue={typed} placeholder="예: 추가 자료를 첨부했습니다" /></label>
+                <button type="submit">답변 완료 (보류 풀기)</button>
+              </form>
             )}
-            {q.caseId === 'CONTRACT-INF-001' ? (
-            <div className="actions">
-              {preset('유리한 회신(모의): 9/30 지급', '2026-09-30', '유리한 회신(모의): 고정 피는 2026-09-30에 지급합니다.')}
-              {preset('불리한 회신(모의): 8/10 지급', '2026-08-10', '불리한 회신(모의): 고정 피는 2026-08-10에 지급합니다.')}
-              {preset('지연 회신(모의): 일정 미정', null, '지연 회신(모의): 지급 일정은 아직 미정입니다.')}
-            </div>
-            ) : null}
-            <form action={actReply} className="inline">
-              <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" /><input type="hidden" name="resolved" value="1" />
-              <label>값이 필요 없는 회신(예: 추가 자료) <input name="text" size={36} required /></label>
-              <button type="submit">회신 완료(보류 해제·재판정)</button>
-            </form>
-            <form method="get" action="/requests" className="inline">
-              <input type="hidden" name="req" value={q.id} />
-              <label>회신 원문 <input name="text" size={48} defaultValue={req && String(q.id) === req ? text : ''} placeholder="예: 지급일은 2026-08-10입니다" /></label>
-              <button type="submit">값 후보 추출</button>
-            </form>
-            {extracted && String(q.id) === req && (
-              <p className="meta">추출 후보: {JSON.stringify(extracted.candidates)} ({extracted.source === 'ai' ? 'AI' : '템플릿'}{extracted.note && `, ${extracted.note}`}) — 아래 값을 확인한 뒤 반영하세요.</p>
-            )}
-            <form action={actReply} className="hold">
-              <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" />
-              <label>회신 내용 <input name="text" size={40} defaultValue={req && String(q.id) === req ? text : ''} /></label>
-              <label>현금 유출일 <input type="date" name="cashOutflowDate" defaultValue={prefill.cashOutflowDate ?? ''} /></label>
-              <label>연 고정 피(원) <input name="fee" inputMode="numeric" defaultValue={prefill.annualFixedFeeKrw ?? ''} /></label>
-              <button type="submit">회신 반영(모의) · 재계산</button>
-            </form>
+
+            <details className="fold"><summary>도움말·시연용 버튼</summary>
+              <p><Link href={`/requests?draft=${q.id}`}>이 요청을 보내는 글 초안 보기</Link></p>
+              {draftOut && draftReq?.id === q.id && (
+                <blockquote>{draftOut.text} <small>({draftOut.source === 'ai' ? 'AI 작성' : '자동 작성'}{draftOut.note && ` · ${draftOut.note}`})</small></blockquote>
+              )}
+              {isContractDate && (
+                <>
+                  <p>미리 만들어 둔 답변으로 시연해 볼 수 있어요.</p>
+                  <div className="actions">
+                    {preset('유리한 답변: 9월 30일에 지급', '2026-09-30', '유리한 회신(모의): 고정 비용은 2026-09-30에 지급합니다.')}
+                    {preset('불리한 답변: 8월 10일에 지급', '2026-08-10', '불리한 회신(모의): 고정 비용은 2026-08-10에 지급합니다.')}
+                    {preset('답변 지연: 일정 미정', null, '지연 회신(모의): 지급 일정은 아직 미정입니다.')}
+                  </div>
+                  <form method="get" action="/requests" className="inline">
+                    <input type="hidden" name="req" value={q.id} />
+                    <label>답변 글에서 날짜 뽑아 보기 <input name="text" size={40} defaultValue={typed} placeholder="예: 지급일은 2026-08-10입니다" /></label>
+                    <button type="submit" className="secondary">날짜 찾기</button>
+                  </form>
+                  {extracted && String(q.id) === req && (
+                    <p className="meta">찾은 값: {prefill.cashOutflowDate ?? '없음'} ({extracted.source === 'ai' ? 'AI' : '자동'}{extracted.note && `, ${extracted.note}`}) — 위 입력칸에 채워 두었으니 확인한 뒤 눌러 주세요.</p>
+                  )}
+                </>
+              )}
+            </details>
           </section>
         );
       })}
-      <h2>처리된 요청</h2>
-      {done.length === 0 ? <p>없음</p> : <ul>{done.map((q) => <li key={q.id}>#{q.id} {q.caseId} · {q.needed} · {q.status} {q.repliedDate && `(${q.repliedDate})`} {q.replyValues && <small>{JSON.stringify(q.replyValues)}</small>}</li>)}</ul>}
+
+      <details className="fold"><summary>처리된 요청 {done.length}건</summary>
+        {done.length === 0 ? <p>아직 없습니다.</p> : (
+          <ul>{done.map((q) => (
+            <li key={q.id}>{name.get(q.caseId)}({q.caseId}) · {NEEDED_PLAIN[q.needed] ?? q.needed} · {REQ_STATUS[q.status] ?? q.status}{q.repliedDate && ` (${q.repliedDate})`}</li>
+          ))}</ul>
+        )}
+      </details>
     </>
   );
 }

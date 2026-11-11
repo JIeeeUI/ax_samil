@@ -68,3 +68,7 @@ ul.plain { margin: 0; padding-left: 0; list-style: none; }
 ul.plain li { margin: 3px 0; }
 button.secondary { background: transparent; color: var(--fg); border-color: var(--line); }
 body { font-size: 16px; }
+.scenarios { display: grid; gap: 10px; margin: 10px 0; }
+.scn { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--card); }
+.scn.on { border-color: var(--accent); }
+.scn p { margin: 4px 0 8px; color: var(--muted); font-size: 0.92rem; }
