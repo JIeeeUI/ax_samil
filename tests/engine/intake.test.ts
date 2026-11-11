@@ -21,7 +21,7 @@ test('key rows', () => {
   expect(p7).toMatchObject({ 실효결정기한: '2026-07-17', 확정기한: '2026-08-14' });
   expect(p7.이슈).toContain('EXECUTION_BEFORE_DEADLINE');
   const c = rows.find((r) => r.제안ID === 'CONTRACT-INF-001')!;
-  expect(c).toMatchObject({ 종류: '전속계약', 금액규모: '풀스케일', 하회구간해당: '미확인', 승인경로: 'CEO/이사회 상신', 캠페인: '' });
+  expect(c).toMatchObject({ 종류: '전속계약', 금액규모: '풀스케일', 하회구간해당: '미확인', 필요정보: 'cash_outflow_date', 승인경로: 'CEO/이사회 상신', 캠페인: '' });
   expect(c.이슈).toContain('CONTRACT_OUTFLOW_UNKNOWN');
 });
 

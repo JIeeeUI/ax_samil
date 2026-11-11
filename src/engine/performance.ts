@@ -34,8 +34,8 @@ export interface InfluencerPerf {
   gmv: number;
   realRoas: number | null;
   nominalRoas: number | null;
-  /** 1 = 실질 ROAS가 가장 높음 */
-  realRank: number;
+  /** 1 = 실질 ROAS가 가장 높음. 실질 ROAS 계산 불가면 null */
+  realRank: number | null;
 }
 
 const ratio = (num: number, den: number): number | null => (den === 0 ? null : num / den);
@@ -116,10 +116,10 @@ export function computeInfluencerPerformance(room: PerfRoom, a: AssumptionSet): 
       influencerId: i.influencer_id, name: i.influencer_name, feeType: i.fee_type, tier: i.tier,
       spend, spendShare: totalSpend === 0 ? 0 : spend / totalSpend,
       requested: req, requestShare: totalReq === 0 ? 0 : req / totalReq,
-      gmv, realRoas: ratio(cp - spend, spend), nominalRoas: ratio(gmv, spend), realRank: 0,
+      gmv, realRoas: ratio(cp - spend, spend), nominalRoas: ratio(gmv, spend), realRank: null as number | null,
     };
   });
-  const ranked = [...rows].sort((x, y) => (y.realRoas ?? -Infinity) - (x.realRoas ?? -Infinity));
+  const ranked = rows.filter((r) => r.realRoas !== null).sort((x, y) => y.realRoas! - x.realRoas!);
   ranked.forEach((r, idx) => { r.realRank = idx + 1; });
   return rows;
 }

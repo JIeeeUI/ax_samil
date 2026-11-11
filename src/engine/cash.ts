@@ -34,12 +34,18 @@ export function simulateCash(full: FullTables, a: AssumptionSet, horizonEnd: Iso
     const d = place(due, a.overdueAr);
     if (d) put(d, r.outstanding_krw);
   }
+  const poIds = new Set(full.purchaseOrders.map((p) => p.po_id));
   for (const r of full.apAging) {
-    if (r.po_id !== null) continue; // 발주 연결분은 발주 파일에서 한 번만 (이중 계상 방지)
+    // 발주 파일에 있는 발주 연결분만 제외 (이중 계상 방지). 발주 파일에 없는 po_id는 지급으로 센다.
+    if (r.po_id !== null && poIds.has(r.po_id)) continue;
     const d = place(r.payment_due_date, a.overdueAp);
     if (d) put(d, -r.amount_krw);
   }
-  for (const p of full.purchaseOrders) put(p.payment_due_date, -p.amount_krw);
+  // 기준일 전 발주 대금도 연체 매입채무와 같은 정책으로 처리한다 [가정]
+  for (const p of full.purchaseOrders) {
+    const d = place(p.payment_due_date, a.overdueAp);
+    if (d) put(d, -p.amount_krw);
+  }
 
   const opening = full.cashDaily.at(-1)!.closing_balance;
   let balance = opening;
@@ -57,6 +63,11 @@ export function simulateCash(full: FullTables, a: AssumptionSet, horizonEnd: Iso
 
 export function isInBreach(date: IsoDate, breach: CashResult['breach']): boolean {
   return breach !== null && date >= breach.start && date <= breach.end;
+}
+
+/** 현금 유출일이 하회 구간 안인지. 주말 유출은 다음 영업일에 실제로 나가므로 이월 후 판정한다. */
+export function outflowInBreach(date: IsoDate, breach: CashResult['breach']): boolean {
+  return isInBreach(nextBusinessDay(date), breach);
 }
 
 /** 실적 구간 항등식(기초 + 유입 − 유출 = 기말)이 깨진 날만 반환. */

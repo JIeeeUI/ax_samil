@@ -1,7 +1,7 @@
 import type { AssumptionSet } from './assumptions.js';
 import { daysBetween } from './calendar.js';
 import { buildCases, planTotal, alertStage } from './cases.js';
-import { isInBreach, simulateCash } from './cash.js';
+import { outflowInBreach, simulateCash } from './cash.js';
 import { channelReturnBenchmark, evaluateIssues } from './issues.js';
 import { computeCampaignPerformance, computeInfluencerPerformance } from './performance.js';
 import { ROUTE_LABEL, routeCase } from './routing.js';
@@ -41,8 +41,9 @@ export interface IntakeRow {
 const r2 = (x: number | null): number | '' => (x === null ? '' : Math.round(x * 100) / 100);
 const r3 = (x: number | null): number | '' => (x === null ? '' : Math.round(x * 1000) / 1000);
 
+/** 값이 있는 항목만 내림차순 순위를 매긴다(계산 불가는 순위 없음). */
 function rankDesc<T>(items: T[], key: (t: T) => number | null, id: (t: T) => string): Map<string, number> {
-  const sorted = [...items].sort((a, b) => (key(b) ?? -Infinity) - (key(a) ?? -Infinity));
+  const sorted = items.filter((t) => key(t) !== null).sort((a, b) => key(b)! - key(a)!);
   return new Map(sorted.map((t, i) => [id(t), i + 1]));
 }
 
@@ -84,17 +85,17 @@ export function buildIntake(room: DataRoom, a: AssumptionSet, today: IsoDate = a
       남은일수: daysBetween(today, k.effectiveDeadline),
       알림단계: alertStage(today, k.effectiveDeadline) ?? '',
       기안예상GMV: k.expectedGmv ?? '',
-      기안예상명목ROAS: k.expectedGmv === null ? '' : r2(k.expectedGmv / k.amount),
+      기안예상명목ROAS: k.expectedGmv === null || k.amount === 0 ? '' : r2(k.expectedGmv / k.amount),
       과거명목ROAS: r2(camp ? camp.nominalRoas : inf.nominalRoas),
       과거실질ROAS: r2(camp ? camp.realRoas : inf.realRoas),
       반품률: camp ? r3(camp.returnRate) : '',
       채널기준반품률: benchPct === undefined ? '' : r3(benchPct / 100),
-      명목순위: camp ? campNominalRank.get(camp.campaignId)! : infNominalRank.get(inf.influencerId)!,
-      실질순위: camp ? campRealRank.get(camp.campaignId)! : inf.realRank,
+      명목순위: (camp ? campNominalRank.get(camp.campaignId) : infNominalRank.get(inf.influencerId)) ?? '',
+      실질순위: (camp ? campRealRank.get(camp.campaignId) : inf.realRank) ?? '',
       요청비중: r3(inf.requestShare),
       기존집행비중: r3(inf.spendShare),
       하회구간: window,
-      하회구간해당: k.cashOutflowDate === null ? '미확인' : isInBreach(k.cashOutflowDate, cash.breach) ? '예' : '아니오',
+      하회구간해당: k.cashOutflowDate === null ? '미확인' : outflowInBreach(k.cashOutflowDate, cash.breach) ? '예' : '아니오',
       승인경로: ROUTE_LABEL[route.level],
       판정근거: route.reasons.join(' / '),
       필요정보: route.needsInfo.join(';'),

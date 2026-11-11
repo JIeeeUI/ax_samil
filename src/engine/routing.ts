@@ -1,5 +1,5 @@
 import { THRESHOLDS } from './assumptions.js';
-import { isInBreach, type CashResult } from './cash.js';
+import { outflowInBreach, type CashResult } from './cash.js';
 import type { Case } from './cases.js';
 
 export type RouteLevel = 'CEO_BOARD' | 'MASIL_CEO_GROUP_REPORT' | 'MASIL_CEO' | 'MARKETING';
@@ -25,9 +25,11 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
  */
 export function routeCase(c: Case, ctx: { breach: CashResult['breach']; planTotal: number }): Route {
   if (c.kind === 'contract' && c.amount > THRESHOLDS.contractAnnualKrw) {
-    return { level: 'CEO_BOARD', reasons: [`전속계약 연 ${won(c.amount)} > 10억 원`], needsInfo: [] };
+    return c.cashOutflowDate === null
+      ? { level: 'CEO_BOARD', reasons: [`전속계약 연 ${won(c.amount)} > 10억 원`, '현금 유출일 미확인'], needsInfo: ['cash_outflow_date'] }
+      : { level: 'CEO_BOARD', reasons: [`전속계약 연 ${won(c.amount)} > 10억 원`], needsInfo: [] };
   }
-  if (c.cashOutflowDate !== null && isInBreach(c.cashOutflowDate, ctx.breach)) {
+  if (c.cashOutflowDate !== null && outflowInBreach(c.cashOutflowDate, ctx.breach)) {
     return {
       level: 'CEO_BOARD',
       reasons: [`현금 유출일 ${c.cashOutflowDate}이 covenant 하회 구간(${ctx.breach!.start}~${ctx.breach!.end}) 안`],
