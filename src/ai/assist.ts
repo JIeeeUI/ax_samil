@@ -12,9 +12,11 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 const NEEDED_LABEL: Record<string, string> = {
   cash_outflow_date: '고정 피 현금 유출일(지급 일정)',
   payment_schedule: '고정 피 지급 일정',
+  performance_fee_terms: '성과 피(GMV 연동) 조건',
 };
 const NEEDED_WHY: Record<string, string> = {
   cash_outflow_date: '하회 구간(covenant) 해당 여부를 판정할 수 없어 승인 경로가 확정되지 않습니다.',
+  performance_fee_terms: '성과 피를 포함하면 연 10억 원을 넘을 수 있어 승인 경로가 잠정입니다.',
 };
 
 /** 엔진이 계산한 값만 모은다. AI 문장은 이 안의 숫자·날짜만 쓸 수 있다. */

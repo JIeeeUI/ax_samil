@@ -38,9 +38,12 @@ export function routeCase(c: Case, ctx: { breaches: BreachWindow[]; planTotal: n
     };
   }
   if (c.kind === 'contract') {
+    // 정책의 "연 10억 원"이 고정 피만인지 성과 피 포함 총 보수인지 문서에 정의가 없다 [가정: 고정 피 기준].
+    // 고정 피가 10억 이하일 때만 성과 피 포함 시 10억을 넘을 수 있으므로 잠정 경로로 표시한다.
+    const provisional = '성과 피 포함 시 10억 원 초과 여부 미확인: 잠정 경로';
     return c.cashOutflowDate === null
-      ? { level: 'MASIL_CEO', reasons: ['전속계약 연 10억 원 이하', '현금 유출일 미확인: 하회 구간이면 CEO 상신으로 바뀜'], needsInfo: ['cash_outflow_date'] }
-      : { level: 'MASIL_CEO', reasons: ['전속계약 연 10억 원 이하', '현금 유출일이 하회 구간 밖'], needsInfo: [] };
+      ? { level: 'MASIL_CEO', reasons: ['전속계약 연 10억 원 이하(고정 피 기준)', '현금 유출일 미확인: 하회 구간이면 CEO 상신으로 바뀜', provisional], needsInfo: ['cash_outflow_date', 'performance_fee_terms'] }
+      : { level: 'MASIL_CEO', reasons: ['전속계약 연 10억 원 이하(고정 피 기준)', '현금 유출일이 하회 구간 밖', provisional], needsInfo: ['performance_fee_terms'] };
   }
   const reasons: string[] = [];
   if (c.amount > THRESHOLDS.perItemKrw) reasons.push(`건별 ${won(c.amount)} > 1천만 원`);

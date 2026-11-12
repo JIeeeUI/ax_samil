@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic';
 const NEEDED_PLAIN: Record<string, string> = {
   cash_outflow_date: '고정 비용이 실제로 나가는 날짜',
   payment_schedule: '고정 비용 지급 일정',
+  performance_fee_terms: '성과 피(GMV 연동) 조건 — 포함하면 연 10억 원을 넘는지',
 };
 const REQ_STATUS: Record<string, string> = { requested: '답변 기다리는 중', replied: '답변 받음', closed: '종료' };
 const CONTRACT = 'CONTRACT-INF-001';

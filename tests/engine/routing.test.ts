@@ -32,11 +32,16 @@ test('contract fee variants', () => {
   const c18 = contractOf(buildCases(room, { annualFixedFeeKrw: 1800000000 }));
   expect(routeCase(c18, { breaches, planTotal: total }).level).toBe('CEO_BOARD');
   const c9 = contractOf(buildCases(room, { annualFixedFeeKrw: 900000000 }));
-  expect(routeCase(c9, { breaches, planTotal: total })).toMatchObject({ level: 'MASIL_CEO', needsInfo: ['cash_outflow_date'] });
+  const r9 = routeCase(c9, { breaches, planTotal: total });
+  expect(r9).toMatchObject({ level: 'MASIL_CEO', needsInfo: ['cash_outflow_date', 'performance_fee_terms'] });
+  expect(r9.reasons.join(' ')).toContain('성과 피 포함 시 10억 원 초과 여부 미확인: 잠정 경로');
   const c9in = contractOf(buildCases(room, { annualFixedFeeKrw: 900000000, cashOutflowDate: '2026-08-03' }));
   expect(routeCase(c9in, { breaches, planTotal: total })).toMatchObject({ level: 'CEO_BOARD', needsInfo: [] });
   const c9out = contractOf(buildCases(room, { annualFixedFeeKrw: 900000000, cashOutflowDate: '2026-09-01' }));
-  expect(routeCase(c9out, { breaches, planTotal: total })).toMatchObject({ level: 'MASIL_CEO', needsInfo: [] });
+  expect(routeCase(c9out, { breaches, planTotal: total })).toMatchObject({ level: 'MASIL_CEO', needsInfo: ['performance_fee_terms'] });
+  // 10억 초과(28억·18억)는 성과 피와 무관하게 CEO/이사회라 추가 확인이 필요 없다.
+  expect(routeCase(c18, { breaches, planTotal: total }).needsInfo).not.toContain('performance_fee_terms');
+  expect(routeCase(contractOf(buildCases(room)), { breaches, planTotal: total }).needsInfo).toEqual(['cash_outflow_date']);
 });
 
 test('threshold boundaries', () => {

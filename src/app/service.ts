@@ -22,7 +22,7 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -87,9 +87,10 @@ export class IntakeService {
   /** 필요 정보가 남은 건에 열린 확인 요청이 없으면 만든다(담당 재무, 기한 = min(오늘+3일, 실효 기한)). */
   private async ensureInfoRequests(c: Computed, id: string, simulated: boolean) {
     const route = c.routes.get(id)!;
-    const open = await this.repo.listInfoRequests({ status: 'requested', caseId: id });
+    const all = await this.repo.listInfoRequests({ caseId: id });
     for (const needed of route.needsInfo) {
-      if (open.some((r) => r.needed === needed)) continue;
+      // 열려 있거나 이미 회신 완료된 요청은 다시 만들지 않는다(값이 없는 확인 사항이 계속 되살아나지 않게).
+      if (all.some((r) => r.needed === needed && (r.status === 'requested' || r.status === 'replied'))) continue;
       const eff = c.cases.find((k) => k.id === id)!.effectiveDeadline;
       let due = addDays(c.clock.today, 3);
       if (due > eff) due = eff;
@@ -186,7 +187,8 @@ export class IntakeService {
         id: k.id, kind: k.kind, influencerId: k.influencerId, influencer: row.인플루언서, campaign: row.캠페인,
         amount: k.amount, scale: row.금액규모, deadline: k.deadline, settlementDate: row.집행예정일,
         effectiveDeadline: k.effectiveDeadline, daysLeft: row.남은일수, alertStage: row.알림단계,
-        status: st.status, routeLevel: st.routeLevel, routeLabel: ROUTE_LABEL[st.routeLevel], inBreach: row.하회구간해당,
+        status: st.status, routeLevel: st.routeLevel, routeLabel: ROUTE_LABEL[st.routeLevel],
+        provisional: !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms'), inBreach: row.하회구간해당,
         issues: row.이슈 === '' ? [] : row.이슈.split(';'), nominalRank: row.명목순위, realRank: row.실질순위,
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
       };
@@ -227,6 +229,7 @@ export class IntakeService {
       notes.push('금액 판단 유보: 표본 성과 순위와 고정 피를 곱하지 않고 나란히만 봅니다.');
       if (k.cashOutflowDate === null) notes.push('고정 피 지급 일정(현금 유출일) 미확인: 하회 구간 해당 여부를 판정할 수 없습니다.');
     }
+    if (item.provisional) notes.push('잠정 경로: 성과 피를 포함하면 연 10억 원을 넘을 수 있는지 확인되지 않았습니다. 지금은 고정 피 기준으로 잠정 판정했고, 성과 피 조건을 확인한 뒤 확정해야 합니다.');
     if (k.executesBeforeDeadline) notes.push(`확정 전 집행 예정: 집행 예정일 ${k.settlementDate}이 확정기한 ${k.deadline}보다 빠릅니다.`);
     return {
       item, row: c.intake.find((r) => r.제안ID === id)!, reasons: frozen?.reasons ?? route.reasons,

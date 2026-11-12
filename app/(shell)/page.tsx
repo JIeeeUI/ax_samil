@@ -14,7 +14,7 @@ function Row({ i, role, showStep }: { i: TodayItem; role: Parameters<typeof next
       <td><Link href={`/cases/${i.id}`}><strong>{i.influencer}</strong></Link><br /><small>{i.id}</small></td>
       <td className="num">{won(i.amount)}<br /><small>{i.scale === '풀스케일' ? '연간 계약 금액' : '캠페인 요청액'}</small></td>
       <td>{i.effectiveDeadline}<br /><small>{daysLeftText(i.daysLeft)}</small></td>
-      <td><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}</Badge></td>
+      <td><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}</Badge>{i.provisional && <Badge tone="amber">잠정</Badge>}</td>
       <td>{serious > 0 ? <Badge tone="red">주의 {serious}가지</Badge> : <small>특이사항 없음</small>}</td>
       <td>{showStep ? nextStep(i, role).text : null}<br /><Link href={`/cases/${i.id}`}>열어 보기 →</Link></td>
     </tr>

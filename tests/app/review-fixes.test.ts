@@ -76,3 +76,22 @@ test('final #5: a held plan can be released with a values-free resolution', asyn
   expect(d.item.status).toBe('routed');
   expect(d.requests.find((q) => q.id === req.id)!.status).toBe('replied');
 });
+
+test('9억 variant: performance-fee terms are requested once, shown as provisional, and not re-requested after resolution', async () => {
+  const { svc } = await make();
+  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+  let d = await svc.getCase(CONTRACT);
+  expect(d.needsInfo).toEqual(['cash_outflow_date', 'performance_fee_terms']);
+  expect(d.item.provisional).toBe(true);
+  expect(d.notes.join(' ')).toContain('잠정 경로');
+  const perf = d.requests.filter((q) => q.needed === 'performance_fee_terms');
+  expect(perf).toHaveLength(1);
+  expect(perf[0]).toMatchObject({ ownerRole: 'finance', status: 'requested' });
+  await svc.replyInfoRequest(perf[0].id, { text: '성과 피는 별도 정산, 10억 이하 확인', simulated: true, resolved: true });
+  d = await svc.getCase(CONTRACT);
+  expect(d.requests.filter((q) => q.needed === 'performance_fee_terms')).toHaveLength(1); // 다시 만들지 않는다
+  expect(d.requests.find((q) => q.id === perf[0].id)!.status).toBe('replied');
+  // 28억 원 실계약은 10억 초과라 잠정 경로가 아니다.
+  const base = await make();
+  expect((await base.svc.getCase(CONTRACT)).item.provisional).toBe(false);
+});
