@@ -47,13 +47,13 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
 
   if (name === 'change') {
     await svc.reset();
-    await svc.proposeContractChange({ annualFixedFeeKrw: 1_800_000_000 });
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 1_800_000_000 });
     const d18 = await svc.getCase(CONTRACT_ID);
     facts.fee18 = { route: d18.item.routeLevel, penaltyAtRenewal: d18.penalty };
     say(`고정 피 연 18억 원: 경로 ${d18.item.routeLevel}, 갱신 직후 해지 위약금 ${d18.penalty}원`);
 
     await svc.reset();
-    await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
     const d9 = await svc.getCase(CONTRACT_ID);
     facts.fee9 = {
       route: d9.item.routeLevel,
@@ -69,7 +69,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
     say(`회신 ${IN_BREACH}(하회 구간 안) → ${facts.reply0810Route}`);
 
     await svc.reset();
-    await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
     await replyOpen({
       text: `회신(모의): ${AFTER_BREACH} 지급`, values: { cashOutflowDate: AFTER_BREACH }, simulated: true,
     });

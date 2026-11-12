@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { summarizeForApproval } from '../../../../src/ai/assist.js';
 import { createProvider } from '../../../../src/ai/provider.js';
 import { getService } from '../../../../src/app/instance.js';
-import { defaultOwnerFor } from '../../../../src/workflow/ownership.js';
+import { canChangeContract, defaultOwnerFor } from '../../../../src/workflow/ownership.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
 import {
   actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
@@ -171,11 +171,10 @@ export default async function CasePage({
           ))}</tbody></table>
       </details>
 
-      {i.kind === 'contract' && !['approved', 'closed', 'overdue'].includes(i.status) && (
+      {i.kind === 'contract' && !['approved', 'closed', 'overdue'].includes(i.status) && canChangeContract(role) && (
         <details className="fold"><summary>시연: 고정 비용을 낮추자고 한다면?</summary>
           <form action={actProposeChange} className="hold">{hidden}
             <label>1년 고정 비용(원) <input name="fee" inputMode="numeric" placeholder="1800000000" required /></label>
-            <label>돈이 나가는 날(알고 있다면) <input type="date" name="cashOutflowDate" /></label>
             <button type="submit" className="secondary">이 조건으로 다시 계산하기</button>
           </form>
           <p className="meta">시연용 입력이에요. 금액에 따라 결정하는 사람이 바뀌는지 볼 수 있어요 (예: 18억 원, 9억 원).</p>

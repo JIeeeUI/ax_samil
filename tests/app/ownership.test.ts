@@ -39,14 +39,14 @@ test('only the owner and the deciding roles may answer', () => {
 
 test('the 9억 variant asks finance for the payment date and the contract owner for the performance-fee terms', async () => {
   const { svc } = await make();
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
   expect(await reqOf(svc, 'cash_outflow_date')).toMatchObject({ ownerRole: 'finance', status: 'requested' });
   expect(await reqOf(svc, 'performance_fee_terms')).toMatchObject({ ownerRole: 'contract', status: 'requested' });
 });
 
 test('a role that is neither the owner nor a deciding role cannot answer; the owner and the approvers can', async () => {
   const { svc } = await make();
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
   const perf = await reqOf(svc, 'performance_fee_terms');
   const ask = (actor: 'marketing' | 'finance' | 'contract' | 'masil_ceo' | 'ceo_board') =>
     svc.replyInfoRequest(perf.id, { actor, text: '성과 피 별도 정산, 10억 이하', simulated: true, resolved: true });
@@ -63,7 +63,7 @@ test('a role that is neither the owner nor a deciding role cannot answer; the ow
 
 test('the CEO of Masil can answer on behalf of the owner', async () => {
   const { svc } = await make();
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
   const perf = await reqOf(svc, 'performance_fee_terms');
   await svc.replyInfoRequest(perf.id, { actor: 'masil_ceo', text: '대신 입력', simulated: true, resolved: true });
   expect((await reqOf(svc, 'performance_fee_terms')).status).toBe('replied');
@@ -101,7 +101,7 @@ test('the hold form pre-fills the owner from the topic and keeps an explicit cho
 
 test('"my turn" follows the owner of the open requests', async () => {
   const { svc } = await make();
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 }); // 대표 경로
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 }); // 대표 경로
   await svc.confirmFinance(CONTRACT, 'finance');
   await svc.submit(CONTRACT, 'marketing');
   await svc.decide(CONTRACT, 'masil_ceo', { hold: { needed: 'performance_fee_terms', ownerRole: 'contract', dueDate: '2026-07-04' } });
@@ -126,4 +126,35 @@ test('after a rejection finance sees a re-check notice, marketing sees its turn'
   const fin = nextStep(item, 'finance');
   expect(fin.kind).toBe('waiting');
   expect(fin.text).toContain('재확인');
+});
+
+test('review I-1: only the contract owner and the approvers can change the contract terms, and the real actor is logged', async () => {
+  const { svc } = await make();
+  for (const actor of ['marketing', 'finance'] as const) {
+    await expect(svc.proposeContractChange({ actor, annualFixedFeeKrw: 900_000_000 })).rejects.toThrow(/ROLE_NOT_ALLOWED/);
+  }
+  expect((await svc.getCase(CONTRACT)).item.routeLevel).toBe('CEO_BOARD'); // 거부되면 아무것도 바뀌지 않는다
+  await svc.proposeContractChange({ actor: 'masil_ceo', annualFixedFeeKrw: 1_800_000_000 });
+  const ev = (await svc.getCase(CONTRACT)).events.find((e) => e.action === 'propose_change')!;
+  expect(ev.actor_role).toBe('masil_ceo');
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
+  expect((await svc.getCase(CONTRACT)).item.routeLevel).toBe('MASIL_CEO');
+});
+
+test('review I-2: a reply can only carry the value that belongs to its topic', async () => {
+  const { svc } = await make();
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
+  const perf = await reqOf(svc, 'performance_fee_terms');
+  const cash = await reqOf(svc, 'cash_outflow_date');
+  await expect(svc.replyInfoRequest(perf.id, { actor: 'contract', text: 'x', values: { cashOutflowDate: '2026-08-10' }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
+  await expect(svc.replyInfoRequest(cash.id, { actor: 'finance', text: 'x', values: { annualFixedFeeKrw: 2_800_000_000 }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
+  expect((await svc.getCase(CONTRACT)).item.routeLevel).toBe('MASIL_CEO'); // 계약 조건은 그대로
+  expect((await reqOf(svc, 'cash_outflow_date')).status).toBe('requested');
+  await svc.replyInfoRequest(cash.id, { actor: 'finance', text: '9/30 지급', values: { cashOutflowDate: '2026-09-30' }, simulated: true });
+  expect((await reqOf(svc, 'cash_outflow_date')).status).toBe('replied');
+});
+
+test('review M-3: canReply refuses a non-role actor even when it equals a stored owner string', () => {
+  expect(canReply('system', 'system')).toBe(false);
+  expect(canReply('nobody', 'nobody')).toBe(false);
 });

@@ -35,8 +35,7 @@ export function commands(svc: IntakeService) {
     close: (id: string, role: Actor) => attempt(() => svc.close(id, role)),
     reply: (requestId: number, actor: Actor, text: string, values: ReplyValues | undefined, simulated: boolean, resolved = false) =>
       attempt(() => svc.replyInfoRequest(requestId, { actor, text, values, simulated, resolved })),
-    proposeChange: (fee: number, cashOutflowDate?: IsoDate | null) =>
-      attempt(() => svc.proposeContractChange({ annualFixedFeeKrw: fee, cashOutflowDate })),
+    proposeChange: (actor: Actor, fee: number) => attempt(() => svc.proposeContractChange({ actor, annualFixedFeeKrw: fee })),
     primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
     primaryHold: (id: string, role: Actor, hold: HoldInput) => attempt(() => svc.primaryHold(id, role, hold)),
     primaryReturn: (id: string, role: Actor) => attempt(() => svc.primaryReturn(id, role)),

@@ -57,8 +57,7 @@ export async function actReply(fd: FormData) {
 }
 
 export async function actProposeChange(fd: FormData) {
-  const date = field(fd, 'cashOutflowDate');
-  return done(fd, await (await cmd()).proposeChange(num(field(fd, 'fee')) ?? NaN, date === '' ? undefined : date));
+  return done(fd, await (await cmd()).proposeChange(await currentRole(), num(field(fd, 'fee')) ?? NaN));
 }
 
 /** 1차 대표 검토: 상신 / 보류 / 반려 */

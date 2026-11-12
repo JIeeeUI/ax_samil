@@ -9,7 +9,7 @@ import type { DataRoom, IsoDate } from '../engine/types.js';
 import type { AlertRow, Clock, EventRow, InfoRequestRow, Repo, ReviewRow } from '../store/repo.js';
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
 import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
-import { canReply, defaultOwnerFor } from '../workflow/ownership.js';
+import { canChangeContract, canReply, defaultOwnerFor, replyKeysFor } from '../workflow/ownership.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
 
@@ -102,7 +102,7 @@ export class IntakeService {
     return { ...st, status: st.status as Status, routeLevel: st.routeLevel as RouteLevel };
   }
 
-  /** 필요 정보가 남은 건에 열린 확인 요청이 없으면 만든다(담당 재무, 기한 = min(오늘+3일, 실효 기한)). */
+  /** 필요 정보가 남은 건에 열린 확인 요청이 없으면 만든다(담당 = 주제별로 정보를 가진 부서, 기한 = min(오늘+3일, 실효 기한)). */
   private async ensureInfoRequests(c: Computed, id: string, simulated: boolean) {
     const route = c.routes.get(id)!;
     const all = await this.repo.listInfoRequests({ caseId: id });
@@ -368,19 +368,17 @@ export class IntakeService {
     return changed;
   }
 
-  async proposeContractChange(input: { annualFixedFeeKrw: number; cashOutflowDate?: IsoDate | null }): Promise<void> {
+  /** 에이전시의 고정 피 조건 변경 제안(모의 입력). 계약 담당과 결재 역할만 입력한다. 현금 유출일은 확인 요청 회신으로만 바뀐다. */
+  async proposeContractChange(input: { actor: Actor; annualFixedFeeKrw: number }): Promise<void> {
+    if (!canChangeContract(input.actor)) throw new Error(`ROLE_NOT_ALLOWED: 계약 조건 변경은 계약 담당 또는 결재자만 입력할 수 있습니다(${input.actor})`);
     if (!Number.isInteger(input.annualFixedFeeKrw) || input.annualFixedFeeKrw <= 0) throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
-    if (input.cashOutflowDate != null && !isIsoDate(input.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
     const st = await this.requireState(CONTRACT_ID);
     if (TERMINAL.has(st.status)) throw new Error(`CASE_CLOSED: ${CONTRACT_ID}: 현재 상태 ${st.status}`);
     const before = await this.compute();
-    await this.applyContract({
-      annualFixedFeeKrw: input.annualFixedFeeKrw,
-      ...(input.cashOutflowDate !== undefined ? { cashOutflowDate: input.cashOutflowDate } : {}),
-    });
+    await this.applyContract({ annualFixedFeeKrw: input.annualFixedFeeKrw });
     const c = await this.compute();
     await this.rejudge(c, CONTRACT_ID);
-    await this.log(c, CONTRACT_ID, 'contract', 'propose_change', {
+    await this.log(c, CONTRACT_ID, input.actor, 'propose_change', {
       simulated: true,
       detail: {
         fromFeeKrw: before.cases.find((k) => k.id === CONTRACT_ID)!.amount, toFeeKrw: input.annualFixedFeeKrw,
@@ -403,6 +401,10 @@ export class IntakeService {
     const caseState = await this.requireState(req.caseId);
     if (TERMINAL.has(caseState.status)) throw new Error(`CASE_CLOSED: ${req.caseId}: 현재 상태 ${caseState.status}라 회신을 반영할 수 없습니다`);
     const v = input.values ?? {};
+    // 회신 값은 그 요청의 주제에 속한 것만 받는다(다른 부서가 담당하는 계약 조건을 바꾸지 못하게).
+    const given = Object.entries(v).filter(([, x]) => x !== undefined).map(([k]) => k);
+    const stray = given.filter((k) => !replyKeysFor(req.needed).includes(k));
+    if (stray.length > 0) throw new Error(`INVALID_REPLY: "${req.needed}" 요청은 ${stray.join(', ')} 값을 받을 수 없습니다`);
     if (v.cashOutflowDate !== undefined && !isIsoDate(v.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
     if (v.annualFixedFeeKrw !== undefined && (!Number.isInteger(v.annualFixedFeeKrw) || v.annualFixedFeeKrw <= 0)) {
       throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');

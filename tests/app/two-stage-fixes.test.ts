@@ -151,9 +151,9 @@ test('review #8: a stale 1st-stage row does not survive a route change', async (
   const { svc } = await make({ twoStage: true });
   await submitContract(svc);
   await svc.primaryEscalate(CONTRACT, 'masil_ceo');
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 }); // CEO_BOARD → 대표 경로
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 }); // CEO_BOARD → 대표 경로
   expect((await svc.getCase(CONTRACT)).item.routeLevel).toBe('MASIL_CEO');
-  await svc.proposeContractChange({ annualFixedFeeKrw: 2_800_000_000 }); // 다시 CEO_BOARD
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 2_800_000_000 }); // 다시 CEO_BOARD
   const d = await svc.getCase(CONTRACT);
   expect(d.item.routeLevel).toBe('CEO_BOARD');
   expect(d.review!.state).toBe('pending'); // 1차를 건너뛰지 않는다

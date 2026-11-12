@@ -79,7 +79,7 @@ test('final #5: a held plan can be released with a values-free resolution', asyn
 
 test('9억 variant: performance-fee terms are requested once, shown as provisional, and not re-requested after resolution', async () => {
   const { svc } = await make();
-  await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
+  await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
   let d = await svc.getCase(CONTRACT);
   expect(d.needsInfo).toEqual(['cash_outflow_date', 'performance_fee_terms']);
   expect(d.item.provisional).toBe(true);
