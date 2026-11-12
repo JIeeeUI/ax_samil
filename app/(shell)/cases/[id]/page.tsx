@@ -50,7 +50,7 @@ export default async function CasePage({
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>
-              <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><button type="submit" className="danger">거절</button></form>
+              <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><input name="rejectReason" placeholder="거절 사유(필수)" required /><button type="submit" className="danger">거절</button></form>
             </div>
           )}
           {i.status === 'rejected' && role === 'marketing' && (
@@ -68,6 +68,7 @@ export default async function CasePage({
           </form>
         </details>
       )}
+      {d.rejection && <div className="flash flash-warn"><strong>거절 사유</strong>: {d.rejection.reason} <small>({ROLE_LABEL[d.rejection.actor as keyof typeof ROLE_LABEL] ?? d.rejection.actor} · {koDate(d.rejection.date)})</small></div>}
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
       {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
 
@@ -87,7 +88,7 @@ export default async function CasePage({
             <>
               <div className="two">
                 <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="escalate" /><button type="submit">검토 마치고 CEO/이사회에 올리기</button></form>
-                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="return" /><button type="submit" className="danger">반려</button></form>
+                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="return" /><input name="rejectReason" placeholder="반려 사유(필수)" required /><button type="submit" className="danger">반려</button></form>
               </div>
               {d.review.state === 'pending' && (d.review.canHold ? (
                 <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>

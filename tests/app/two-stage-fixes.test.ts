@@ -68,7 +68,7 @@ test('review #5: when the CEO decides first, the 1st-stage hold request is close
   await submitContract(svc);
   await svc.primaryHold(CONTRACT, 'masil_ceo', hold('payment_schedule', '2026-07-10'));
   await svc.advanceClock('2026-07-07');
-  await svc.decide(CONTRACT, 'ceo_board', 'reject');
+  await svc.decide(CONTRACT, 'ceo_board', { reject: { reason: '테스트 사유' } });
   expect((await svc.getCase(CONTRACT)).review!.state).toBe('closed_parallel');
   expect((await open(svc)).some((q) => q.needed === 'payment_schedule')).toBe(false);
 });

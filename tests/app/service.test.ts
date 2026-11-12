@@ -150,7 +150,7 @@ test('setScenario re-routes only non-terminal cases and logs the reason; closed 
   const [closedId, openId] = (await byLevel(svc, 'CEO_BOARD')).filter((i) => i.kind === 'plan').map((i) => i.id);
   await svc.confirmFinance(closedId, 'finance');
   await svc.submit(closedId, 'marketing');
-  await svc.decide(closedId, 'ceo_board', 'reject');
+  await svc.decide(closedId, 'ceo_board', { reject: { reason: '테스트 사유' } });
   await svc.close(closedId, 'marketing');
   await svc.setScenario('lc45');
   const open = await svc.getCase(openId);

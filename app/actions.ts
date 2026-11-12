@@ -67,7 +67,7 @@ export async function actPrimary(fd: FormData) {
   const c = await cmd();
   const op = field(fd, 'op');
   if (op === 'escalate') return done(fd, await c.primaryEscalate(id, role));
-  if (op === 'return') return done(fd, await c.primaryReturn(id, role));
+  if (op === 'return') return done(fd, await c.primaryReturn(id, role, field(fd, 'rejectReason')));
   if (op === 'hold') {
     return done(fd, await c.primaryHold(id, role, { needed: field(fd, 'holdNeeded'), ownerRole: (field(fd, 'holdOwner') || defaultOwnerFor(field(fd, 'holdNeeded'))) as Role, dueDate: field(fd, 'holdDue') }));
   }

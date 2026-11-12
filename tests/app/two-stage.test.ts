@@ -105,9 +105,11 @@ test('urgent (10 days or fewer): a pending or held 1st stage triggers a parallel
 test('1st-stage return is a rejection that can be resubmitted and starts the 1st stage again', async () => {
   const { svc } = await make({ twoStage: true });
   await submitContract(svc);
-  await svc.primaryReturn(CONTRACT, 'masil_ceo');
+  await svc.primaryReturn(CONTRACT, 'masil_ceo', '테스트 사유');
   expect((await svc.getCase(CONTRACT)).item.status).toBe('rejected');
   await svc.resubmit(CONTRACT, 'marketing');
+  expect((await svc.getCase(CONTRACT)).item.status).toBe('finance_review');
+  await submitContract(svc);
   const d = await svc.getCase(CONTRACT);
   expect(d.item.status).toBe('submitted');
   expect(d.review).toMatchObject({ state: 'pending', parallel: false });

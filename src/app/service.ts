@@ -16,7 +16,8 @@ import { TERMINAL, transition, type Action, type HoldInput, type Status } from '
 export const CONTRACT_ID = 'CONTRACT-INF-001';
 export interface ContractOverrides { annualFixedFeeKrw?: number; cashOutflowDate?: IsoDate | null }
 export type Actor = Role | 'system';
-export type Decision = 'approve' | 'reject' | { hold: HoldInput };
+export type Decision = 'approve' | { reject: { reason: string } } | { hold: HoldInput };
+export interface Rejection { reason: string; actor: string; date: IsoDate; stage: 'final' | 'primary' }
 export interface ReplyValues { cashOutflowDate?: IsoDate; annualFixedFeeKrw?: number }
 export interface Raised { caseId: string; stage: string; kind: 'alert' | 'escalation' | 'expired' | 'parallel' | 'warning' }
 
@@ -51,6 +52,8 @@ export interface CaseDetail {
   notes: string[]; penalty: number | null; escalation: readonly string[] | null; alerts: AlertRow[];
   /** 1차/2차 결재를 켠 CEO/이사회 경로 건에만 값이 있다 */
   review: ReviewView | null;
+  /** 거절된 상태일 때 마지막 거절 사유 */
+  rejection: Rejection | null;
 }
 
 interface Computed {
@@ -60,6 +63,10 @@ interface Computed {
 
 /** 사람 역할이 대신 입력하는 결재·회신은 모의로 표시한다(명세 11장). */
 const SIMULATED_ACTORS: ReadonlySet<Actor> = new Set<Actor>(['masil_ceo', 'ceo_board', 'contract']);
+
+function requireReason(reason: string | undefined): void {
+  if (typeof reason !== 'string' || reason.trim() === '') throw new Error('REASON_REQUIRED: 거절 사유를 입력해야 합니다');
+}
 
 export class IntakeService {
   private repo: Repo;
@@ -274,7 +281,15 @@ export class IntakeService {
       notes, penalty: k.kind === 'contract' ? terminationPenalty(k.amount, '2026-09-01') : null,
       escalation: esc ? ESCALATION_OPTIONS : null, alerts,
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
+      rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
     };
+  }
+
+  private lastRejection(events: EventRow[]): Rejection | null {
+    const e = [...events].reverse().find((x) => x.action === 'reject' || x.action === 'primary_return');
+    if (!e) return null;
+    const reason = (e.detail as { reason?: string } | null)?.reason ?? '';
+    return { reason, actor: e.actor_role, date: e.business_date, stage: e.action === 'reject' ? 'final' : 'primary' };
   }
 
   /** 종결된 건에 남은 열린 확인 요청을 닫는다. */
@@ -285,7 +300,7 @@ export class IntakeService {
   }
 
   // ---------- 상태 변경 ----------
-  private async act(id: string, actor: Actor, action: Action, opts: { hold?: HoldInput; rejudge?: boolean } = {}) {
+  private async act(id: string, actor: Actor, action: Action, opts: { hold?: HoldInput; rejudge?: boolean; detail?: unknown } = {}) {
     const c = await this.compute();
     const st = await this.requireState(id);
     const next = transition(st, action, actor, { today: c.clock.today, hold: opts.hold });
@@ -293,7 +308,7 @@ export class IntakeService {
     const ok = await this.repo.transitionState(id, st.status, { status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
     if (!ok) throw new Error(`INVALID_TRANSITION: ${id}: 방금 다른 요청으로 이미 처리되었습니다(${action})`);
     if (TERMINAL.has(next)) await this.closeOpenRequests(id);
-    await this.log(c, id, actor, action, { detail: opts.hold });
+    await this.log(c, id, actor, action, { detail: opts.detail ?? opts.hold });
     return c;
   }
 
@@ -315,6 +330,7 @@ export class IntakeService {
   async close(id: string, actor: Actor): Promise<void> { await this.act(id, actor, 'close'); }
 
   async decide(id: string, actor: Actor, decision: Decision): Promise<void> {
+    if (typeof decision !== 'string' && 'reject' in decision) requireReason(decision.reject.reason);
     // 1차/2차를 켠 CEO/이사회 경로: CEO는 2차 요청(1차 상신 또는 병행 상신)이 있어야 결정한다.
     let openFirstStage: ReviewRow | null = null;
     if (actor === 'ceo_board' && (await this.getConfig()).twoStage) {
@@ -328,7 +344,7 @@ export class IntakeService {
     }
     await this.decideCore(id, actor, decision);
     // CEO가 승인·거절로 먼저 결정했으면 1차는 "병행 결정"으로 닫는다(보류는 결정이 아니라 1차를 닫지 않는다).
-    if (openFirstStage && (decision === 'approve' || decision === 'reject')) {
+    if (openFirstStage && !(typeof decision !== 'string' && 'hold' in decision)) {
       const cur = await this.repo.getReview(id);
       const closed = await this.repo.claimReview(id, { states: ['pending', 'held'] }, { state: 'closed_parallel', holdDue: null, holdRequestId: null });
       if (closed) {
@@ -339,7 +355,13 @@ export class IntakeService {
   }
 
   private async decideCore(id: string, actor: Actor, decision: Decision): Promise<void> {
-    if (decision === 'approve' || decision === 'reject') { await this.act(id, actor, decision); return; }
+    if (decision === 'approve') { await this.act(id, actor, 'approve'); return; }
+    if ('reject' in decision) {
+      // 거절하면 그 건의 열린 확인 요청은 닫는다. 재상신 때 필요한 것만 다시 만든다.
+      await this.act(id, actor, 'reject', { detail: { reason: decision.reject.reason.trim() } });
+      await this.closeOpenRequests(id);
+      return;
+    }
     const c = await this.act(id, actor, 'hold', { hold: decision.hold });
     await this.repo.addInfoRequest({
       caseId: id, needed: decision.hold.needed, ownerRole: decision.hold.ownerRole, dueDate: decision.hold.dueDate,
@@ -646,7 +668,8 @@ export class IntakeService {
   }
 
   /** 1차 반려: 거절(재상신 가능)과 같다. */
-  async primaryReturn(id: string, actor: Actor): Promise<void> {
+  async primaryReturn(id: string, actor: Actor, reason: string): Promise<void> {
+    requireReason(reason);
     const { st, rv, c } = await this.primaryContext(id, actor);
     const next = transition(st, 'primary_return', actor);
     if (!(await this.repo.transitionState(id, st.status, { status: next, routeLevel: st.routeLevel, updatedBusinessDate: c.clock.today }))) {
@@ -654,7 +677,8 @@ export class IntakeService {
     }
     if (rv.holdRequestId !== null) await this.repo.updateInfoRequest(rv.holdRequestId, { status: 'closed' });
     await this.repo.claimReview(id, { states: ['pending', 'held', 'escalated'] }, { state: 'returned', holdDue: null, holdRequestId: null });
-    await this.log(c, id, actor, 'primary_return');
+    await this.closeOpenRequests(id);
+    await this.log(c, id, actor, 'primary_return', { detail: { reason: reason.trim() } });
   }
 
   /** 긴급 구간 안에서 상신·재상신하거나 설정을 켜면 시계를 다시 넘기지 않아도 병행 상신을 보낸다. */

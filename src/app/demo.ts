@@ -123,15 +123,16 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
 
     await svc.reset();
     await submitContract();
-    await svc.decide(CONTRACT_ID, 'ceo_board', 'reject');
+    await svc.decide(CONTRACT_ID, 'ceo_board', { reject: { reason: '시연: 조건 재검토 필요' } });
     await svc.resubmit(CONTRACT_ID, 'marketing');
+    await submitContract(); // 재상신은 재무 확인부터 다시 시작한다
     facts.afterRejectResubmit = (await svc.getCase(CONTRACT_ID)).item.status;
     say(`CEO 거절 → 재상신 → ${facts.afterRejectResubmit}`);
 
     await svc.reset();
     await svc.confirmFinance('PLAN-001', 'finance');
     await svc.submit('PLAN-001', 'marketing');
-    await svc.decide('PLAN-001', 'ceo_board', 'reject');
+    await svc.decide('PLAN-001', 'ceo_board', { reject: { reason: '시연: 조건 재검토 필요' } });
     facts.linkWarning = (await svc.getCase(CONTRACT_ID)).linkWarnings[0]?.message ?? null;
     say(`혜인 기안 PLAN-001만 부결: ${facts.linkWarning}`);
   }

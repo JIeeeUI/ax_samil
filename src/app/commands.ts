@@ -19,7 +19,8 @@ export async function attempt(fn: () => Promise<unknown>): Promise<Result> {
 
 /** 폼 값(문자열 맵)을 결정으로 바꾼다. 보류의 담당·기한 검증은 서비스(상태 기계)가 한다. */
 export function decisionFromForm(f: Record<string, string | undefined>): Decision {
-  if (f.decision === 'approve' || f.decision === 'reject') return f.decision;
+  if (f.decision === 'approve') return 'approve';
+  if (f.decision === 'reject') return { reject: { reason: f.rejectReason ?? '' } };
   if (f.decision === 'hold') {
     return { hold: { needed: f.holdNeeded ?? '', ownerRole: ((f.holdOwner ?? '') || defaultOwnerFor(f.holdNeeded ?? '')) as Role, dueDate: f.holdDue ?? '' } };
   }
@@ -38,7 +39,7 @@ export function commands(svc: IntakeService) {
     proposeChange: (actor: Actor, fee: number) => attempt(() => svc.proposeContractChange({ actor, annualFixedFeeKrw: fee })),
     primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
     primaryHold: (id: string, role: Actor, hold: HoldInput) => attempt(() => svc.primaryHold(id, role, hold)),
-    primaryReturn: (id: string, role: Actor) => attempt(() => svc.primaryReturn(id, role)),
+    primaryReturn: (id: string, role: Actor, reason: string) => attempt(() => svc.primaryReturn(id, role, reason)),
     setConfig: (patch: Partial<Config>) => attempt(() => svc.setConfig(patch)),
     advanceClock: (to: IsoDate) => attempt(() => svc.advanceClock(to)),
     setScenario: (id: ScenarioId) => attempt(() => svc.setScenario(id)),
