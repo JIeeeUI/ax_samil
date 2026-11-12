@@ -55,3 +55,9 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
 }
 
 export const daysLeftText = (n: number) => (n < 0 ? `${-n}일 지남` : n === 0 ? '오늘까지' : `${n}일 남음`);
+
+/** 2026-07-17 → 7월 17일 */
+export function koDate(iso: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[1])}월 ${Number(m[2])}일` : iso;
+}

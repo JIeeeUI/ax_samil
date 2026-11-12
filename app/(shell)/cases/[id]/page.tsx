@@ -7,7 +7,7 @@ import {
   actClose, actConfirmFinance, actDecide, actProposeChange, actResubmit, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
-import { STATUS_PLAIN, WHO_DECIDES, daysLeftText, issuePlain, nextStep } from '../../../plain.js';
+import { STATUS_PLAIN, WHO_DECIDES, daysLeftText, issuePlain, koDate, nextStep } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -41,9 +41,9 @@ export default async function CasePage({
           <dd>{won(i.amount)} <small>{i.scale === '풀스케일' ? '(1년치 고정 비용 · 회사 실제 규모)' : '(캠페인 한 건)'}</small></dd>
           <dt>누가 결정하나요</dt>
           <dd><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}</Badge>{i.provisional && <Badge tone="amber">잠정</Badge>} <small>{d.reasons[0]}</small>
-            {i.boardDate && <div>기한 전에 열리는 이사회: {i.boardDate}</div>}</dd>
+            {i.boardDate && <div>기한 전에 열리는 이사회: {koDate(i.boardDate)}</div>}</dd>
           <dt>언제까지 결정해야 하나요</dt>
-          <dd><strong>{i.effectiveDeadline}</strong> ({daysLeftText(i.daysLeft)})
+          <dd><strong>{koDate(i.effectiveDeadline)}</strong> ({daysLeftText(i.daysLeft)})
             {i.settlementDate !== '' && i.settlementDate < i.deadline && <div><small>계약 확정일은 {i.deadline}이지만, 돈이 먼저 나가는 날이 {i.settlementDate}이라 이 날까지 결정해야 해요.</small></div>}</dd>
           <dt>확인할 점</dt>
           <dd>{i.issues.length === 0 ? '특이사항 없음' : (
