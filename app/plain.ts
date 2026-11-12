@@ -78,3 +78,11 @@ export const FLOW_STEPS = ['재무 확인', '상신', '결정', '완료'] as con
 /** 진행 단계(0~3) */
 export const flowIndex = (status: string): number =>
   status === 'finance_review' ? 0 : status === 'routed' ? 1 : status === 'approved' || status === 'closed' || status === 'overdue' ? 3 : 2;
+
+/** 확인 요청의 '필요한 정보' 이름(코드 값이면 쉬운 말로, 이미 문장이면 그대로) */
+export const NEEDED_PLAIN: Record<string, string> = {
+  cash_outflow_date: '고정 비용이 실제로 나가는 날짜',
+  payment_schedule: '고정 비용 지급 일정',
+  performance_fee_terms: '성과 피 조건(포함하면 연 10억 원을 넘는지)',
+};
+export const neededLabel = (needed: string) => NEEDED_PLAIN[needed] ?? needed;

@@ -24,19 +24,20 @@ export function TabBar() {
   );
 }
 
-/** 고르면 바로 바뀌는 역할 선택(시연용) */
+/** 역할 선택(시연용). 고른 뒤 '바꾸기'를 눌러야 적용되고, 지금 보던 화면으로 돌아온다. */
 export function RoleSwitch({
   role, options, action,
 }: { role: string; options: { value: string; label: string }[]; action: (fd: FormData) => Promise<void> }) {
+  const path = usePathname();
   return (
     <form action={action} className="roleswitch">
-      <input type="hidden" name="back" value="/" />
+      <input type="hidden" name="back" value={path} />
       <label><span>보는 사람</span>
-        <select name="role" defaultValue={role} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
+        <select name="role" defaultValue={role}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </label>
-      <noscript><button type="submit">바꾸기</button></noscript>
+      <button type="submit" className="secondary small">바꾸기</button>
     </form>
   );
 }

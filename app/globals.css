@@ -1,8 +1,8 @@
 :root {
   color-scheme: light dark;
-  --bg: #f2f4f6; --card: #ffffff; --fg: #191f28; --muted: #6b7684; --line: #e5e8eb;
-  --primary: #3182f6; --primary-fg: #ffffff; --primary-bg: #e8f3ff;
-  --red: #e5384a; --red-bg: #ffeceb; --amber: #b25e09; --amber-bg: #fff3e0; --green: #028a52; --green-bg: #e6f7ef;
+  --bg: #f2f4f6; --card: #ffffff; --fg: #191f28; --muted: #5b6573; --line: #e5e8eb;
+  --primary: #1b64da; --primary-fg: #ffffff; --primary-bg: #e8f3ff;
+  --red: #c2202e; --red-bg: #ffeceb; --amber: #8f4c05; --amber-bg: #fff3e0; --green: #02713f; --green-bg: #e6f7ef;
   font-family: 'Pretendard', system-ui, -apple-system, 'Malgun Gothic', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
@@ -128,3 +128,8 @@ blockquote { margin: 8px 0; padding: 10px 14px; border-radius: 12px; background:
 .num { text-align: right; }
 .facts ul.plain li { display: block; border: 0; padding: 2px 0; }
 .card-block h2, section.summary h2 { margin-top: 0; }
+
+/* 역할 선택: 고른 뒤 '바꾸기'를 눌러야 적용(키보드로 훑어볼 수 있게) */
+.roleswitch { display: flex; align-items: flex-end; gap: 8px; }
+button.small { min-height: 44px; padding: 8px 14px; font-size: 0.9rem; border-radius: 12px; }
+ul.reqs { margin: 6px 0 0; padding-left: 20px; } ul.reqs li { margin: 3px 0; }

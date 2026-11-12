@@ -7,7 +7,7 @@ import {
   actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
-import { FLOW_STEPS, STATUS_PLAIN, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
+import { FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -123,7 +123,12 @@ export default async function CasePage({
         </div>
       )}
       {d.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
-      {openReqs.length > 0 && <div className="flash flash-ok">답을 기다리는 확인 요청 {openReqs.length}건 — {openReqs.map((q) => `${ROLE_LABEL[q.ownerRole as keyof typeof ROLE_LABEL] ?? q.ownerRole}이(가) ${koDate(q.dueDate)}까지`).join(', ')}</div>}
+      {openReqs.length > 0 && (
+        <div className="flash flash-ok">
+          <strong>답을 기다리는 확인 요청 {openReqs.length}건</strong>
+          <ul className="reqs">{openReqs.map((q) => <li key={q.id}>{neededLabel(q.needed)} <small>({ROLE_LABEL[q.ownerRole as keyof typeof ROLE_LABEL] ?? q.ownerRole} · {koDate(q.dueDate)}까지)</small></li>)}</ul>
+        </div>
+      )}
 
       <details className="fold"><summary>계산 근거 자세히 보기</summary>
         <div className="grid">
