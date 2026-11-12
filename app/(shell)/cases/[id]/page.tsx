@@ -40,6 +40,8 @@ export default async function CasePage({
 
       <h1>{step.text}<small>{i.influencer} · {i.kind === 'contract' ? '연간 전속계약 갱신' : '캠페인 확대 요청'} ({id})</small></h1>
 
+      <div className="cols"><div className="col">
+
       {step.kind === 'mine' && (
         <div className="cta">
           {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<button type="submit">재무 확인 완료</button></form>}
@@ -130,6 +132,7 @@ export default async function CasePage({
         </div>
       )}
 
+      </div><div className="col">
       <details className="fold"><summary>계산 근거 자세히 보기</summary>
         <div className="grid">
           <div><h3>과거 실제 성과</h3><dl>
@@ -177,6 +180,7 @@ export default async function CasePage({
           <p className="meta">시연용 입력이에요. 금액에 따라 결정하는 사람이 바뀌는지 볼 수 있어요 (예: 18억 원, 9억 원).</p>
         </details>
       )}
+      </div></div>
     </>
   );
 }

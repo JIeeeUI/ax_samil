@@ -53,19 +53,19 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 답변하기</span></div><span className="go" aria-hidden>›</span></Link>
       )}
 
-      {mine.slice(0, SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine />)}
+      <div className="cardgrid">{mine.slice(0, SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine />)}</div>
       {mine.length > SHOW_FIRST && (
         <details className="fold"><summary>나머지 {mine.length - SHOW_FIRST}건 더 보기</summary>
-          {mine.slice(SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine />)}</details>
+          <div className="cardgrid">{mine.slice(SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine />)}</div></details>
       )}
 
       {waiting.length > 0 && (
         <details className="fold"><summary>다른 사람을 기다리는 건 {waiting.length}건</summary>
-          {waiting.map(({ i, s }) => <CaseRow key={i.id} i={i} mine={false} hint={s.text} />)}</details>
+          <div className="cardgrid">{waiting.map(({ i, s }) => <CaseRow key={i.id} i={i} mine={false} hint={s.text} />)}</div></details>
       )}
       {done.length > 0 && (
         <details className="fold"><summary>끝난 건 {done.length}건</summary>
-          {done.map((i) => <CaseRow key={i.id} i={i} mine={false} hint={nextStep(i, role).text} />)}</details>
+          <div className="cardgrid">{done.map((i) => <CaseRow key={i.id} i={i} mine={false} hint={nextStep(i, role).text} />)}</div></details>
       )}
       <p className="meta">캠페인 요청액(표본 자료)과 연간 계약 금액(회사 실제 규모)은 더하지 않고 따로 봐요.</p>
     </>
