@@ -38,7 +38,7 @@ export default async function CasePage({
         {FLOW_STEPS.map((s, n) => <li key={s} className={n < at ? 'done' : n === at ? 'now' : ''} aria-current={n === at ? 'step' : undefined}>{s}{n === at ? <span className="sr"> (현재 단계)</span> : null}</li>)}
       </ol>
 
-      <h1>{step.text}<small>{i.influencer} · {i.kind === 'contract' ? '연간 전속계약 갱신' : '캠페인 확대 요청'} ({id})</small></h1>
+      <h1>{step.text}<small>{i.influencer} · {i.kind === 'contract' ? '연간 전속계약 갱신' : '캠페인 확대 요청'}</small></h1>
 
       <div className="cols"><div className="col">
 

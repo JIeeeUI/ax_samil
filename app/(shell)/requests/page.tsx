@@ -57,7 +57,7 @@ export default async function Requests({
         );
         return (
           <section key={q.id} className="card-block">
-            <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} ({q.caseId})</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
+            <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} {q.caseId.startsWith('CONTRACT') ? '연간 계약' : '캠페인'}</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
             <p>
               답변 담당 <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong> · 기한 <strong>{q.dueDate}</strong>
               {late && <> <Badge tone="red">기한이 지났어요</Badge></>}
