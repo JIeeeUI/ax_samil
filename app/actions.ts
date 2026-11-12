@@ -87,7 +87,7 @@ export async function actSetConfig(fd: FormData) {
 export async function actAdvanceClock(fd: FormData) { return done(fd, await (await cmd()).advanceClock(field(fd, 'date'))); }
 export async function actSetScenario(fd: FormData) {
   const id = field(fd, 'scenario');
-  if (!(id in SCENARIOS)) return done(fd, { ok: false, error: `UNKNOWN_SCENARIO: ${id}` });
+  if (!Object.hasOwn(SCENARIOS, id)) return done(fd, { ok: false, error: `UNKNOWN_SCENARIO: ${id}` });
   return done(fd, await (await cmd()).setScenario(id as ScenarioId));
 }
 export async function actReset(fd: FormData) { return done(fd, await (await cmd()).reset()); }

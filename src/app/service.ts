@@ -37,7 +37,7 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -188,7 +188,9 @@ export class IntakeService {
   }
 
   // ---------- 조회 ----------
-  private buildItems(c: Computed, statuses: Map<string, { status: Status; routeLevel: RouteLevel }>): TodayItem[] {
+  private buildItems(
+    c: Computed, statuses: Map<string, { status: Status; routeLevel: RouteLevel }>, reviews: Map<string, ReviewRow>, twoStage: boolean,
+  ): TodayItem[] {
     const byId = new Map(c.intake.map((r) => [r.제안ID, r]));
     return c.cases.map((k) => {
       const row = byId.get(k.id)!;
@@ -198,11 +200,19 @@ export class IntakeService {
         amount: k.amount, scale: row.금액규모, deadline: k.deadline, settlementDate: row.집행예정일,
         effectiveDeadline: k.effectiveDeadline, daysLeft: row.남은일수, alertStage: row.알림단계,
         status: st.status, routeLevel: st.routeLevel, routeLabel: ROUTE_LABEL[st.routeLevel],
+        primaryPending: twoStage && st.routeLevel === 'CEO_BOARD' && st.status === 'submitted' && (() => {
+          const rv = reviews.get(k.id);
+          return (!rv || rv.state === 'pending' || rv.state === 'held') && !(rv?.parallel);
+        })(),
         provisional: !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms'), inBreach: row.하회구간해당,
         issues: row.이슈 === '' ? [] : row.이슈.split(';'), nominalRank: row.명목순위, realRank: row.실질순위,
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
       };
     }).sort((x, y) => x.effectiveDeadline.localeCompare(y.effectiveDeadline) || x.id.localeCompare(y.id));
+  }
+
+  private async reviewMap() {
+    return new Map((await this.repo.listReviews()).map((r) => [r.caseId, r]));
   }
 
   private async statusMap() {
@@ -214,7 +224,7 @@ export class IntakeService {
     const sm = await this.statusMap();
     return {
       asOf: c.clock.asOf, today: c.clock.today, scenario: c.scenario, assumptionVersion: c.a.version,
-      breaches: c.cash.breaches, items: this.buildItems(c, sm),
+      breaches: c.cash.breaches, items: this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([k, v]) => [k, v.status]))),
       openRequests: (await this.repo.listInfoRequests({ status: 'requested' })).length,
     };
@@ -225,7 +235,7 @@ export class IntakeService {
     const sm = await this.statusMap();
     const k = c.cases.find((x) => x.id === id);
     if (!k) throw new Error(`UNKNOWN_CASE: ${id}`);
-    const item = this.buildItems(c, sm).find((i) => i.id === id)!;
+    const item = this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage).find((i) => i.id === id)!;
     const route = c.routes.get(id)!;
     const events = await this.repo.listEvents(id);
     // 종결된 건은 결정 당시의 근거를 보여 준다(이후 가정이 바뀌어도 화면이 모순되지 않게).
@@ -276,12 +286,16 @@ export class IntakeService {
     const c = await this.act(id, actor, 'confirm_finance', { rejudge: true });
     await this.ensureInfoRequests(c, id, false);
   }
-  async submit(id: string, actor: Actor): Promise<void> { await this.act(id, actor, 'submit'); }
+  async submit(id: string, actor: Actor): Promise<void> {
+    await this.act(id, actor, 'submit');
+    await this.sweepReview();
+  }
   async resubmit(id: string, actor: Actor): Promise<void> {
     await this.act(id, actor, 'resubmit');
     if (await this.repo.getReview(id)) {
       await this.repo.saveReview({ caseId: id, state: 'pending', parallel: false, parallelDate: null, holdDue: null, holdRequestId: null });
     }
+    await this.sweepReview();
   }
   async close(id: string, actor: Actor): Promise<void> { await this.act(id, actor, 'close'); }
 
@@ -298,10 +312,14 @@ export class IntakeService {
       }
     }
     await this.decideCore(id, actor, decision);
-    if (openFirstStage) {
-      // CEO가 먼저 결정했으면 1차는 "병행 결정"으로 닫는다.
-      await this.repo.saveReview({ ...openFirstStage, state: 'closed_parallel', holdDue: null });
-      await this.log(await this.compute(), id, 'system', 'primary_closed_parallel', { simulated: false, detail: { primary: openFirstStage.state } });
+    // CEO가 승인·거절로 먼저 결정했으면 1차는 "병행 결정"으로 닫는다(보류는 결정이 아니라 1차를 닫지 않는다).
+    if (openFirstStage && (decision === 'approve' || decision === 'reject')) {
+      const cur = await this.repo.getReview(id);
+      const closed = await this.repo.claimReview(id, { states: ['pending', 'held'] }, { state: 'closed_parallel', holdDue: null, holdRequestId: null });
+      if (closed) {
+        if (cur?.holdRequestId != null) await this.repo.updateInfoRequest(cur.holdRequestId, { status: 'closed' });
+        await this.log(await this.compute(), id, 'system', 'primary_closed_parallel', { simulated: false, detail: { primary: openFirstStage.state } });
+      }
     }
   }
 
@@ -328,6 +346,7 @@ export class IntakeService {
       const level = c.routes.get(st.caseId)!.level;
       if (level !== st.routeLevel) {
         await this.repo.upsertState({ ...st, routeLevel: level, updatedBusinessDate: c.clock.today });
+        await this.repo.deleteReview(st.caseId); // 경로가 바뀌면 낡은 1차 검토 행을 버린다(1차를 건너뛰지 않게)
         changed.push(st.caseId);
       }
     }
@@ -375,7 +394,8 @@ export class IntakeService {
       await this.repo.updateInfoRequest(requestId, { status: 'replied', replyText: input.text, repliedDate: c0.clock.today, simulated: input.simulated });
       await this.releasePrimaryHold(c0, req.caseId, requestId);
       const st0 = await this.requireState(req.caseId);
-      if (st0.status === 'on_hold') {
+      const othersOpen0 = (await this.repo.listInfoRequests({ status: 'requested', caseId: req.caseId })).some((o) => o.id !== requestId);
+      if (st0.status === 'on_hold' && !othersOpen0) {
         const owner: Actor = isRole(req.ownerRole) ? req.ownerRole : 'finance';
         const next = transition(st0, 'reply', owner);
         await this.repo.transitionState(req.caseId, 'on_hold', { status: next, routeLevel: c0.routes.get(req.caseId)!.level, updatedBusinessDate: c0.clock.today });
@@ -405,7 +425,8 @@ export class IntakeService {
     const c = await this.compute();
     await this.releasePrimaryHold(c, req.caseId, requestId);
     const st = await this.requireState(req.caseId);
-    if (st.status === 'on_hold') {
+    const othersOpen = (await this.repo.listInfoRequests({ status: 'requested', caseId: req.caseId })).some((o) => o.id !== requestId);
+    if (st.status === 'on_hold' && !othersOpen) {
       const owner: Actor = isRole(req.ownerRole) ? req.ownerRole : 'finance';
       const next = transition(st, 'reply', owner);
       await this.repo.upsertState({ caseId: st.caseId, status: next, routeLevel: c.routes.get(st.caseId)!.level, updatedBusinessDate: c.clock.today });
@@ -428,13 +449,14 @@ export class IntakeService {
     if (patch.twoStage !== undefined && typeof patch.twoStage !== 'boolean') throw bad('twoStage는 켬/끔이어야 합니다');
     if (patch.urgentDays !== undefined && !(Number.isInteger(patch.urgentDays) && patch.urgentDays >= 1 && patch.urgentDays <= 60)) throw bad('긴급 기준은 1~60일');
     if (patch.holdCapDays !== undefined && !(Number.isInteger(patch.holdCapDays) && patch.holdCapDays >= 0 && patch.holdCapDays <= 30)) throw bad('1차 보류 상한은 0~30일');
-    if (patch.alertPlan !== undefined && !(patch.alertPlan in ALERT_PLANS)) throw bad(`알 수 없는 알림 계획표: ${String(patch.alertPlan)}`);
+    if (patch.alertPlan !== undefined && !Object.hasOwn(ALERT_PLANS, patch.alertPlan)) throw bad(`알 수 없는 알림 계획표: ${String(patch.alertPlan)}`);
     const cur = await this.getConfig();
     await this.repo.setSetting('config', { ...cur, ...patch });
     // 계획표를 바꾼 날을 기록한다: 비소급 계획은 이 날 이전에 지난 단계를 만들지 않는다.
     if (patch.alertPlan !== undefined && patch.alertPlan !== cur.alertPlan) {
       await this.repo.setSetting('alertPlanActivatedOn', (await this.getClock()).today);
     }
+    await this.sweepReview();
   }
 
   // ---------- 알림 계획표 ----------
@@ -485,7 +507,8 @@ export class IntakeService {
     const left = daysBetween(today, eff);
     const open = review.state === 'pending' || review.state === 'held';
     if (status === 'submitted' && open && !review.parallel && left >= 0 && left <= cfg.urgentDays) {
-      await this.repo.saveReview({ ...review, parallel: true, parallelDate: today });
+      // 동시에 두 번 돌아도 먼저 선점한 한 번만 병행 상신한다.
+      if (!(await this.repo.claimReview(caseId, { states: ['pending', 'held'], parallel: false }, { parallel: true, parallelDate: today }))) return raised;
       await this.log(c, caseId, 'system', 'parallel_escalate', { simulated: false, detail: { urgentDays: cfg.urgentDays, daysLeft: left, primary: review.state } });
       await this.repo.insertAlertIfAbsent({
         caseId, stage: 'parallel', kind: 'parallel', businessDate: today,
@@ -528,8 +551,17 @@ export class IntakeService {
 
   // ---------- 1차/2차 결재 (설정으로 켠 CEO/이사회 경로만) ----------
   private async reviewOrDefault(caseId: string): Promise<ReviewRow> {
-    return (await this.repo.getReview(caseId)) ??
-      { caseId, state: 'pending', parallel: false, parallelDate: null, holdDue: null, holdRequestId: null };
+    const rv = (await this.repo.getReview(caseId)) ??
+      { caseId, state: 'pending' as const, parallel: false, parallelDate: null, holdDue: null, holdRequestId: null };
+    // 1차 보류의 확인 요청이 다른 경로(같은 주제 회신 등)로 닫혔으면 보류를 풀어 상태와 어긋나지 않게 한다.
+    if (rv.state === 'held' && rv.holdRequestId !== null) {
+      const req = await this.repo.getInfoRequest(rv.holdRequestId);
+      if (!req || req.status !== 'requested') {
+        await this.repo.claimReview(caseId, { states: ['held'] }, { state: 'pending', holdDue: null, holdRequestId: null });
+        return { ...rv, state: 'pending', holdDue: null, holdRequestId: null };
+      }
+    }
+    return rv;
   }
 
   private async reviewView(c: Computed, caseId: string, route: RouteLevel): Promise<ReviewView | null> {
@@ -560,7 +592,9 @@ export class IntakeService {
   /** 1차 상신: 대표 검토를 마치고 CEO/이사회 최종 결정(2차)으로 올린다. */
   async primaryEscalate(id: string, actor: Actor): Promise<void> {
     const { rv, c } = await this.primaryContext(id, actor);
-    await this.repo.saveReview({ ...rv, state: 'escalated', holdDue: null, holdRequestId: null });
+    const ok = await this.repo.claimReview(id, { states: ['pending', 'held'] }, { state: 'escalated', holdDue: null, holdRequestId: null });
+    if (!ok) throw new Error(`PRIMARY_NOT_AVAILABLE: ${id}의 1차 검토가 방금 다른 요청으로 처리되었습니다`);
+    if (rv.holdRequestId !== null) await this.repo.updateInfoRequest(rv.holdRequestId, { status: 'closed' });
     await this.log(c, id, actor, 'primary_escalate');
   }
 
@@ -576,10 +610,18 @@ export class IntakeService {
     if (cap < c.clock.today) throw new Error(`PRIMARY_HOLD_NOT_ALLOWED: 보류 상한일 ${cap}이 이미 지났습니다. 바로 2차(CEO/이사회)로 올리세요`);
     if (hold.dueDate < c.clock.today) throw bad(`기한 ${hold.dueDate}이 오늘 ${c.clock.today}보다 이전`);
     if (hold.dueDate > cap) throw new Error(`PRIMARY_HOLD_LIMIT: 1차 보류 기한은 ${cap}(실효 결정 기한 ${eff} − ${cfg.holdCapDays}일)을 넘을 수 없습니다`);
+    // 먼저 보류를 선점한 요청 하나만 확인 요청을 만든다.
+    if (!(await this.repo.claimReview(id, { states: ['pending'] }, { state: 'held', holdDue: hold.dueDate, holdRequestId: null }))) {
+      throw new Error('PRIMARY_ALREADY_HELD: 1차 보류가 방금 다른 요청으로 처리되었습니다');
+    }
     const reqId = await this.repo.addInfoRequest({
       caseId: id, needed: hold.needed, ownerRole: hold.ownerRole, dueDate: hold.dueDate, createdDate: c.clock.today, simulated: true,
     });
-    await this.repo.saveReview({ ...rv, state: 'held', holdDue: hold.dueDate, holdRequestId: reqId });
+    if (!(await this.repo.claimReview(id, { states: ['held'] }, { holdRequestId: reqId }))) {
+      // 그 사이 CEO가 먼저 결정해 1차가 닫혔다: 고아 요청을 남기지 않는다.
+      await this.repo.updateInfoRequest(reqId, { status: 'closed' });
+      throw new Error('PRIMARY_NOT_AVAILABLE: 1차 보류를 만드는 동안 CEO/이사회가 먼저 결정했습니다');
+    }
     await this.log(c, id, actor, 'primary_hold', { detail: hold });
   }
 
@@ -591,8 +633,20 @@ export class IntakeService {
       throw new Error(`INVALID_TRANSITION: ${id}은(는) 방금 다른 요청으로 처리되었습니다`);
     }
     if (rv.holdRequestId !== null) await this.repo.updateInfoRequest(rv.holdRequestId, { status: 'closed' });
-    await this.repo.saveReview({ ...rv, state: 'returned', holdDue: null, holdRequestId: null });
+    await this.repo.claimReview(id, { states: ['pending', 'held', 'escalated'] }, { state: 'returned', holdDue: null, holdRequestId: null });
     await this.log(c, id, actor, 'primary_return');
+  }
+
+  /** 긴급 구간 안에서 상신·재상신하거나 설정을 켜면 시계를 다시 넘기지 않아도 병행 상신을 보낸다. */
+  private async sweepReview(): Promise<void> {
+    const cfg = await this.getConfig();
+    if (!cfg.twoStage) return;
+    const c = await this.compute();
+    for (const st of await this.repo.listStates()) {
+      if (st.routeLevel !== 'CEO_BOARD' || st.status !== 'submitted') continue;
+      const k = c.cases.find((x) => x.id === st.caseId)!;
+      await this.runReviewGuard(c, cfg, false, st.caseId, 'submitted', k.effectiveDeadline, await this.reviewOrDefault(st.caseId));
+    }
   }
 
   private async releasePrimaryHold(c: Computed, caseId: string, requestId: number): Promise<void> {
@@ -604,7 +658,7 @@ export class IntakeService {
   }
 
   async setScenario(id: ScenarioId): Promise<void> {
-    if (!(id in SCENARIOS)) throw new Error(`UNKNOWN_SCENARIO: ${id}`);
+    if (!Object.hasOwn(SCENARIOS, id)) throw new Error(`UNKNOWN_SCENARIO: ${id}`);
     const prev = (await this.repo.getSetting<ScenarioId>('scenario')) ?? 'baseline';
     // 같은 시나리오여도 재판정은 멱등이라 다시 돌린다(도중 실패 후 재시도로 누락을 메운다).
     await this.repo.setSetting('scenario', id);

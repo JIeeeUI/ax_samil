@@ -143,6 +143,41 @@ export class Repo {
       holdDue: (x.hold_due as string) ?? null, holdRequestId: (x.hold_request_id as number) ?? null,
     };
   }
+  async listReviews(): Promise<ReviewRow[]> {
+    const r = await this.db.query<{ case_id: string }>('select case_id from review1');
+    const out: ReviewRow[] = [];
+    for (const x of r) { const v = await this.getReview(x.case_id); if (v) out.push(v); }
+    return out;
+  }
+  async deleteReview(caseId: string): Promise<void> {
+    await this.db.query('delete from review1 where case_id = $1', [caseId]);
+  }
+  /**
+   * 기대한 상태(와 병행 상신 여부)일 때만 검토 행을 바꾼다. 성공하면 true.
+   * 행이 없으면 pending 기본 행을 먼저 만든다. 동시 요청 중 하나만 성공한다.
+   */
+  async claimReview(
+    caseId: string,
+    from: { states: ReviewRow['state'][]; parallel?: boolean },
+    patch: Partial<Omit<ReviewRow, 'caseId'>>,
+  ): Promise<boolean> {
+    await this.db.query("insert into review1 (case_id, state, parallel) values ($1, 'pending', false) on conflict do nothing", [caseId]);
+    const cols = { state: 'state', parallel: 'parallel', parallelDate: 'parallel_date', holdDue: 'hold_due', holdRequestId: 'hold_request_id' } as const;
+    const params: unknown[] = [caseId];
+    const sets: string[] = [];
+    for (const [k, col] of Object.entries(cols)) {
+      const v = (patch as Record<string, unknown>)[k];
+      if (v === undefined) continue;
+      params.push(v);
+      sets.push(`${col} = $${params.length}`);
+    }
+    if (sets.length === 0) return false;
+    const marks = from.states.map((s) => { params.push(s); return `$${params.length}`; });
+    let where = `case_id = $1 and state in (${marks.join(', ')})`;
+    if (from.parallel !== undefined) { params.push(from.parallel); where += ` and parallel = $${params.length}`; }
+    const r = await this.db.query(`update review1 set ${sets.join(', ')} where ${where} returning case_id`, params);
+    return r.length > 0;
+  }
   async saveReview(r: ReviewRow): Promise<void> {
     await this.db.query(
       `insert into review1 (case_id, state, parallel, parallel_date, hold_due, hold_request_id) values ($1, $2, $3, $4, $5, $6)

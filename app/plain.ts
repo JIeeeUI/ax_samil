@@ -44,6 +44,11 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
       ? { kind: 'mine', text: '결재자에게 올려 주세요(상신)' } : { kind: 'waiting', text: '마케팅·재무팀이 상신하기를 기다리는 중' };
   }
   if (s === 'submitted') {
+    if (item.primaryPending) {
+      // 1차/2차 결재: 1차 대표 검토가 끝나기 전에는 대표가 할 일, CEO/이사회는 기다리는 중
+      return role === 'masil_ceo' ? { kind: 'mine', text: '1차 검토를 해 주세요(상신·보류·반려)' }
+        : { kind: 'waiting', text: `${ROLE_LABEL.masil_ceo}의 1차 검토를 기다리는 중` };
+    }
     return role === decider ? { kind: 'mine', text: '승인·거절·보류 중에서 결정해 주세요' } : { kind: 'waiting', text: `${ROLE_LABEL[decider]}의 결정을 기다리는 중` };
   }
   if (s === 'on_hold') return { kind: 'waiting', text: '확인 요청에 회신이 오기를 기다리는 중' };
