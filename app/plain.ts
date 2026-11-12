@@ -57,7 +57,19 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
 export const daysLeftText = (n: number) => (n < 0 ? `${-n}일 지남` : n === 0 ? '오늘까지' : `${n}일 남음`);
 
 /** 2026-07-17 → 7월 17일 */
-export function koDate(iso: string): string {
-  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${Number(m[1])}월 ${Number(m[2])}일` : iso;
+export const koDate = (d: string) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
+
+/** 2,800,000,000 → 28억 원, 18,962,703 → 1,896만 원 */
+export function shortWon(n: number): string {
+  if (n >= 100_000_000) {
+    const v = n / 100_000_000;
+    return `${Number.isInteger(v) ? v : v.toFixed(1)}억 원`;
+  }
+  if (n >= 10_000) return `${Math.round(n / 10_000).toLocaleString('ko-KR')}만 원`;
+  return `${n.toLocaleString('ko-KR')}원`;
 }
+
+export const FLOW_STEPS = ['재무 확인', '상신', '결정', '완료'] as const;
+/** 진행 단계(0~3) */
+export const flowIndex = (status: string): number =>
+  status === 'finance_review' ? 0 : status === 'routed' ? 1 : status === 'approved' || status === 'closed' || status === 'overdue' ? 3 : 2;
