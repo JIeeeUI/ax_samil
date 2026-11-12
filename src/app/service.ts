@@ -276,7 +276,7 @@ export class IntakeService {
     const next = transition(st, action, actor, { today: c.clock.today, hold: opts.hold });
     const level = opts.rejudge ? c.routes.get(id)!.level : st.routeLevel;
     const ok = await this.repo.transitionState(id, st.status, { status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
-    if (!ok) throw new Error(`INVALID_TRANSITION: ${id}은(는) 방금 다른 요청으로 ${action}이(가) 처리되었습니다`);
+    if (!ok) throw new Error(`INVALID_TRANSITION: ${id}: 방금 다른 요청으로 이미 처리되었습니다(${action})`);
     if (TERMINAL.has(next)) await this.closeOpenRequests(id);
     await this.log(c, id, actor, action, { detail: opts.hold });
     return c;
@@ -357,7 +357,7 @@ export class IntakeService {
     if (!Number.isInteger(input.annualFixedFeeKrw) || input.annualFixedFeeKrw <= 0) throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
     if (input.cashOutflowDate != null && !isIsoDate(input.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
     const st = await this.requireState(CONTRACT_ID);
-    if (TERMINAL.has(st.status)) throw new Error(`CASE_CLOSED: ${CONTRACT_ID}은(는) ${st.status} 상태입니다`);
+    if (TERMINAL.has(st.status)) throw new Error(`CASE_CLOSED: ${CONTRACT_ID}: 현재 상태 ${st.status}`);
     const before = await this.compute();
     await this.applyContract({
       annualFixedFeeKrw: input.annualFixedFeeKrw,
@@ -379,9 +379,9 @@ export class IntakeService {
   async replyInfoRequest(requestId: number, input: { text: string; values?: ReplyValues; simulated: boolean; resolved?: boolean }): Promise<void> {
     const req = await this.repo.getInfoRequest(requestId);
     if (!req) throw new Error(`UNKNOWN_REQUEST: ${requestId}`);
-    if (req.status !== 'requested') throw new Error(`REQUEST_NOT_OPEN: ${requestId}은(는) ${req.status} 상태`);
+    if (req.status !== 'requested') throw new Error(`REQUEST_NOT_OPEN: 요청 ${requestId}: 현재 상태 ${req.status}`);
     const caseState = await this.requireState(req.caseId);
-    if (TERMINAL.has(caseState.status)) throw new Error(`CASE_CLOSED: ${req.caseId}은(는) ${caseState.status} 상태라 회신을 반영할 수 없습니다`);
+    if (TERMINAL.has(caseState.status)) throw new Error(`CASE_CLOSED: ${req.caseId}: 현재 상태 ${caseState.status}라 회신을 반영할 수 없습니다`);
     const v = input.values ?? {};
     if (v.cashOutflowDate !== undefined && !isIsoDate(v.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
     if (v.annualFixedFeeKrw !== undefined && (!Number.isInteger(v.annualFixedFeeKrw) || v.annualFixedFeeKrw <= 0)) {
@@ -581,7 +581,7 @@ export class IntakeService {
     if (actor !== 'masil_ceo') throw new Error(`ROLE_NOT_ALLOWED: 1차 검토는 Masil 대표만 합니다(${actor})`);
     const st = await this.requireState(id);
     if (!cfg.twoStage || st.routeLevel !== 'CEO_BOARD' || st.status !== 'submitted') {
-      throw new Error(`PRIMARY_NOT_AVAILABLE: ${id}은(는) 1차 검토 대상이 아닙니다(설정 켬 + CEO/이사회 경로 + 상신됨 상태만)`);
+      throw new Error(`PRIMARY_NOT_AVAILABLE: ${id}: 1차 검토 대상이 아닙니다(설정 켬 + CEO/이사회 경로 + 상신됨 상태만)`);
     }
     const rv = await this.reviewOrDefault(id);
     if (rv.state !== 'pending' && rv.state !== 'held') throw new Error(`PRIMARY_NOT_AVAILABLE: 1차 검토가 이미 ${rv.state} 상태입니다`);
@@ -630,7 +630,7 @@ export class IntakeService {
     const { st, rv, c } = await this.primaryContext(id, actor);
     const next = transition(st, 'primary_return', actor);
     if (!(await this.repo.transitionState(id, st.status, { status: next, routeLevel: st.routeLevel, updatedBusinessDate: c.clock.today }))) {
-      throw new Error(`INVALID_TRANSITION: ${id}은(는) 방금 다른 요청으로 처리되었습니다`);
+      throw new Error(`INVALID_TRANSITION: ${id}: 방금 다른 요청으로 처리되었습니다`);
     }
     if (rv.holdRequestId !== null) await this.repo.updateInfoRequest(rv.holdRequestId, { status: 'closed' });
     await this.repo.claimReview(id, { states: ['pending', 'held', 'escalated'] }, { state: 'returned', holdDue: null, holdRequestId: null });

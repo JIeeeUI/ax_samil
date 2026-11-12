@@ -47,7 +47,7 @@ export const ALERT_PLANS: Record<AlertPlanId, AlertPlan> = {
     ],
   },
   extended: {
-    id: 'extended', label: '확장(D-30·D-14·D-7·D-3, 대표·CEO에게는 결정 요청 또는 미준비 경고만)', version: '2026-11-12.1',
+    id: 'extended', label: '확장(D-30·D-14·D-7·D-3, 대표·CEO에게는 결정 준비가 됐으면 요청, 안 됐으면 경고만)', version: '2026-11-12.1',
     labelKind: 'assumption', retroactive: false, holdOverdueWarning: true,
     rows: [
       { daysBefore: 30, audienceRoles: WORKERS, messageKey: 'prepare_start' },
@@ -63,7 +63,7 @@ export const MESSAGE_TEXT: Record<string, string> = {
   prepare_start: '결정 준비를 시작하세요(기한까지 30일).',
   final_warning: '최종 경고: 기한이 곧 지납니다.',
   decision_request: '결정에 필요한 서류가 갖춰졌습니다. 결정을 요청합니다.',
-  not_ready_warning: '아직 결정 준비가 안 됐는데 기한이 다가옵니다(미준비 경고).',
+  not_ready_warning: '아직 결정 준비가 안 됐는데 기한이 다가옵니다.',
   pending_reminder: '병행 상신한 결정이 아직 남아 있습니다(미결 재알림).',
   escalation: '결정 없이 기한이 지나면 자동 확정(또는 확정 전 집행)됩니다.',
   parallel_request: '1차 검토가 끝나지 않았지만 기한이 임박해 결정을 병행 요청합니다.',

@@ -74,7 +74,7 @@ export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider |
   const req = d.requests.find((r) => r.needed === needed && r.status === 'requested');
   const owner = req && isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : 'Masil 재무팀';
   const label = NEEDED_LABEL[needed] ?? needed;
-  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 ${label}을(를) ${owner}에 요청합니다.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${NEEDED_WHY[needed] ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
+  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${NEEDED_WHY[needed] ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
   return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t);
 }
 

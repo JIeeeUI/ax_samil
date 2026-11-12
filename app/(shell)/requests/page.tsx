@@ -24,6 +24,7 @@ export default async function Requests({
   const today = (await svc.getClock()).today;
   const v = await svc.listToday();
   const name = new Map(v.items.map((i) => [i.id, i.influencer]));
+  const status = new Map(v.items.map((i) => [i.id, i.status]));
   const all = (await Promise.all(v.items.map((i) => svc.getCase(i.id).then((d) => d.requests)))).flat().sort((a, b) => a.id - b.id);
   const open = all.filter((r) => r.status === 'requested');
   const done = all.filter((r) => r.status !== 'requested');
@@ -58,7 +59,7 @@ export default async function Requests({
           <section key={q.id} className="card-block">
             <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} ({q.caseId})</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
             <p>
-              <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong>이(가) <strong>{q.dueDate}</strong>까지 답해야 해요.
+              답변 담당 <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong> · 기한 <strong>{q.dueDate}</strong>
               {late && <> <Badge tone="red">기한이 지났어요</Badge></>}
             </p>
             {q.replyText && <p className="meta">앞서 받은 답변(필요한 값이 없어 계속 기다리는 중): {q.replyText}</p>}
@@ -74,7 +75,7 @@ export default async function Requests({
               <form action={actReply} className="hold">
                 <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" /><input type="hidden" name="resolved" value="1" />
                 <label>답변 내용 <input name="text" size={40} required defaultValue={typed} placeholder="예: 추가 자료를 첨부했습니다" /></label>
-                <button type="submit">답변 완료 (보류 풀기)</button>
+                <button type="submit">{status.get(q.caseId) === 'on_hold' ? '답변 완료 (보류 풀기)' : '답변 완료'}</button>
               </form>
             )}
 

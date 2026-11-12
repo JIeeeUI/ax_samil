@@ -66,12 +66,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <button type="submit">설정 저장</button>
         </form>
         <h3>활성 알림 계획표: {plan.id} <small>버전 {plan.version} · {plan.retroactive ? '지난 단계도 만듦' : '지난 단계는 만들지 않고 “알림 시점 지남”으로만 표시'}</small></h3>
-        <table><thead><tr><th>단계</th><th>받는 사람</th><th>메시지</th><th>혜인 전속계약(결정 기한 7/17)</th></tr></thead><tbody>
+        <table className="plan"><thead><tr><th>단계</th><th>받는 사람</th><th>메시지</th><th>혜인 전속계약(결정 기한 7/17)</th></tr></thead><tbody>
           {plan.rows.map((row, n) => (
             <tr key={n}>
               <td>D-{row.daysBefore}{row.kind === 'escalation' ? ' 상급자 경고' : ''}</td>
               <td>{[...row.audienceRoles, ...(row.decisionRoles ?? [])].map((r) => ROLE_LABEL[r]).join(', ')}</td>
-              <td><small>{MESSAGE_TEXT[row.messageKey]}{row.decisionRoles ? ` (${row.decisionRoles.map((r) => ROLE_LABEL[r]).join('·')}에게는 준비되면 결정 요청, 아니면 미준비 경고만)` : ''}</small></td>
+              <td><small>{MESSAGE_TEXT[row.messageKey]}{row.decisionRoles ? ` (${row.decisionRoles.map((r) => ROLE_LABEL[r]).join('·')}에게는 결정 준비가 됐으면 결정 요청, 안 됐으면 ‘아직 준비 안 됨’ 경고만)` : ''}</small></td>
               <td>{STATE_KO[planState[n]?.state ?? 'scheduled']} <small>({planState[n]?.triggerDate})</small></td>
             </tr>
           ))}

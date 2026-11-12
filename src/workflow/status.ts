@@ -59,7 +59,7 @@ export function transition(
   if (!rule) throw new Error(`INVALID_TRANSITION: ${s.status} 상태에서 ${action} 불가`);
   const allowed = rule.by === 'decision' ? [decisionRole(s.routeLevel)] : rule.by;
   if (!allowed.includes(actor)) {
-    throw new Error(`ROLE_NOT_ALLOWED: ${actor}은(는) ${s.status}에서 ${action}을(를) 할 수 없음 (허용: ${allowed.join(', ')})`);
+    throw new Error(`ROLE_NOT_ALLOWED: 역할 ${actor}: 상태 ${s.status}에서 ${action} 불가 (허용: ${allowed.join(', ')})`);
   }
   if (action === 'hold') assertHold(ctx.hold, ctx.today);
   return rule.to;

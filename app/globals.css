@@ -133,3 +133,8 @@ blockquote { margin: 8px 0; padding: 10px 14px; border-radius: 12px; background:
 .roleswitch { display: flex; align-items: flex-end; gap: 8px; }
 button.small { min-height: 44px; padding: 8px 14px; font-size: 0.9rem; border-radius: 12px; }
 ul.reqs { margin: 6px 0 0; padding-left: 20px; } ul.reqs li { margin: 3px 0; }
+
+/* 알림 계획표: 한글 단어 중간에서 끊지 않는다 */
+table.plan th:first-child, table.plan td:first-child { white-space: nowrap; }
+table.plan td, table.plan th { word-break: keep-all; overflow-wrap: break-word; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
