@@ -26,7 +26,7 @@ export const WHO_DECIDES: Record<string, string> = {
 
 export const STATUS_PLAIN: Record<string, string> = {
   finance_review: '재무팀 확인 전', routed: '상신 전', submitted: '결정 기다리는 중', approved: '승인됨',
-  rejected: '거절됨', on_hold: '추가 확인 중', overdue: '기한이 지나 자동 확정됨', closed: '종결됨',
+  rejected: '거절됨', on_hold: '추가 확인 중', revision: '재무가 보완을 요청함', consulting: '협의 중', overdue: '기한이 지나 자동 확정됨', closed: '종결됨',
 };
 
 export interface NextStep { kind: 'mine' | 'waiting' | 'done'; text: string }
@@ -58,6 +58,11 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
     const proxy = role === 'masil_ceo' || role === 'ceo_board' ? ' (결재자는 대신 입력할 수도 있어요)' : '';
     return { kind: 'waiting', text: `${names}의 회신을 기다리는 중${proxy}` };
   }
+  if (s === 'revision') {
+    return role === 'marketing' ? { kind: 'mine', text: '재무의 보완 요청에 답해 주세요(조정·변경 없음·협의 필요)' }
+      : { kind: 'waiting', text: `${ROLE_LABEL.marketing}의 보완 답변을 기다리는 중` };
+  }
+  if (s === 'consulting') return { kind: 'waiting', text: '재무·마케팅이 협의하는 중(결과 입력 대기)' };
   if (s === 'rejected') {
     if (role === 'marketing') return { kind: 'mine', text: '다시 올릴지(재상신) 끝낼지(종결) 정해 주세요' };
     return role === 'finance'
@@ -85,7 +90,7 @@ export function shortWon(n: number): string {
 export const FLOW_STEPS = ['재무 확인', '상신', '결정', '완료'] as const;
 /** 진행 단계(0~3) */
 export const flowIndex = (status: string): number =>
-  status === 'finance_review' ? 0 : status === 'routed' ? 1 : status === 'approved' || status === 'closed' || status === 'overdue' ? 3 : 2;
+  status === 'finance_review' || status === 'revision' || status === 'consulting' ? 0 : status === 'routed' ? 1 : status === 'approved' || status === 'closed' || status === 'overdue' ? 3 : 2;
 
 /** 확인 요청의 '필요한 정보' 이름(코드 값이면 쉬운 말로, 이미 문장이면 그대로) */
 export const NEEDED_PLAIN: Record<string, string> = {

@@ -25,6 +25,11 @@ export interface ReviewRow {
   caseId: string; state: 'pending' | 'held' | 'escalated' | 'returned' | 'closed_parallel'; parallel: boolean;
   parallelDate: IsoDate | null; holdDue: IsoDate | null; holdRequestId: number | null;
 }
+export interface RevisionRow {
+  id: number; caseId: string; round: number; reasons: string[]; otherText: string | null; opinion: string;
+  returnDate: IsoDate; dueDate: IsoDate; status: 'open' | 'adjusted' | 'kept' | 'consult' | 'unanswered';
+  replyText: string | null; repliedDate: IsoDate | null;
+}
 export interface AlertInput { caseId: string; stage: string; kind: string; businessDate: IsoDate; payload?: unknown }
 export interface AlertRow { case_id: string; stage: string; kind: string; business_date: IsoDate; payload: unknown }
 
@@ -47,7 +52,7 @@ export class Repo {
   async migrate(): Promise<void> { await this.db.exec(SCHEMA_SQL); }
 
   async resetAll(): Promise<void> {
-    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1 restart identity');
+    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1, revisions restart identity');
   }
 
   async getClock(): Promise<Clock | null> {
@@ -183,6 +188,30 @@ export class Repo {
       `insert into review1 (case_id, state, parallel, parallel_date, hold_due, hold_request_id) values ($1, $2, $3, $4, $5, $6)
        on conflict (case_id) do update set state = $2, parallel = $3, parallel_date = $4, hold_due = $5, hold_request_id = $6`,
       [r.caseId, r.state, r.parallel, r.parallelDate, r.holdDue, r.holdRequestId]);
+  }
+
+  async addRevision(r: { caseId: string; round: number; reasons: string[]; otherText?: string; opinion: string; returnDate: IsoDate; dueDate: IsoDate }): Promise<number> {
+    const x = await this.db.query<{ id: number }>(
+      `insert into revisions (case_id, round, reasons, other_text, opinion, return_date, due_date) values ($1, $2, $3::jsonb, $4, $5, $6, $7) returning id`,
+      [r.caseId, r.round, JSON.stringify(r.reasons), r.otherText ?? null, r.opinion, r.returnDate, r.dueDate]);
+    return x[0].id;
+  }
+  async listRevisions(caseId?: string): Promise<RevisionRow[]> {
+    const rows = await this.db.query<Record<string, unknown>>(
+      'select * from revisions where ($1::text is null or case_id = $1) order by id', [caseId ?? null]);
+    return rows.map((x) => ({
+      id: x.id as number, caseId: x.case_id as string, round: x.round as number, reasons: x.reasons as string[],
+      otherText: (x.other_text as string) ?? null, opinion: x.opinion as string, returnDate: x.return_date as string,
+      dueDate: x.due_date as string, status: x.status as RevisionRow['status'], replyText: (x.reply_text as string) ?? null,
+      repliedDate: (x.replied_date as string) ?? null,
+    }));
+  }
+  /** 열린 상태일 때만 닫는다(동시 처리 방지). */
+  async closeRevision(id: number, status: Exclude<RevisionRow['status'], 'open'>, replyText: string | null, repliedDate: IsoDate): Promise<boolean> {
+    const r = await this.db.query(
+      "update revisions set status = $2, reply_text = $3, replied_date = $4 where id = $1 and status = 'open' returning id",
+      [id, status, replyText, repliedDate]);
+    return r.length > 0;
   }
 
   async insertAlertIfAbsent(a: AlertInput): Promise<boolean> {

@@ -4,8 +4,9 @@ import { createProvider } from '../../../../src/ai/provider.js';
 import { getService } from '../../../../src/app/instance.js';
 import { canChangeContract, defaultOwnerFor } from '../../../../src/workflow/ownership.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
+import { RETURN_REASONS, RETURN_REASON_LABEL } from '../../../../src/workflow/schedule.js';
 import {
-  actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
+  actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actResubmit, actRevisionReply, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
@@ -30,6 +31,8 @@ export default async function CasePage({
   const step = nextStep(i, role);
   const at = flowIndex(i.status);
   const hidden = <><input type="hidden" name="id" value={id} /><input type="hidden" name="back" value={back} /></>;
+  const cfg = await svc.getConfig();
+  const md = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
   const openReqs = d.requests.filter((q) => q.status === 'requested');
   return (
     <>
@@ -45,7 +48,7 @@ export default async function CasePage({
 
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed} /><button type="submit">재무 확인 완료</button></form>}
           {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
@@ -67,6 +70,52 @@ export default async function CasePage({
             <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
           </form>
         </details>
+      )}
+      {i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
+        <details className="fold"><summary>문제가 있으면 마케팅에 되돌리기(반려)</summary>
+          <form action={actFinanceReturn} className="hold">{hidden}
+            <p className="meta">사유를 고르세요. 엔진 결과에 해당하는 칸은 미리 체크해 두었어요. 마케팅은 {koDate(d.returnState.dueIfReturnedToday)}까지 답해야 하고, 반려는 한 번만 할 수 있어요.</p>
+            {RETURN_REASONS.filter((k) => cfg.returnReasons[k]).map((k) => (
+              <label key={k}><input type="checkbox" name="reasons" value={k} defaultChecked={d.returnHints.includes(k)} /> {RETURN_REASON_LABEL[k]}</label>
+            ))}
+            <label>기타 사유(기타를 고른 경우 필수) <input name="otherText" /></label>
+            <label>재무 의견(필수) <input name="opinion" required /></label>
+            <button type="submit" className="secondary">마케팅에 되돌리기</button>
+          </form>
+        </details>
+      ) : <p className="meta">{d.returnState.why}</p>)}
+      {d.adjustments.length > 0 && (
+        <div className="flash flash-warn"><strong>마케팅이 조정한 내용</strong>
+          <ul className="reqs">{d.adjustments.map((a, n) => (
+            <li key={n}>{a.field === 'settlementDate' ? `집행일 ${md(String(a.from))}→${md(String(a.to))} 조정됨` : `요청액 ${shortWon(Number(a.from))}→${shortWon(Number(a.to))} 조정됨`} <small>({koDate(a.date)})</small></li>
+          ))}</ul>
+        </div>
+      )}
+      {d.revisions.length > 0 && (
+        <section className="card-block">
+          <h2>재무 반려(보완 요청)</h2>
+          {d.revisions.map((rv) => (
+            <div key={rv.id}>
+              <p><strong>{koDate(rv.returnDate)} 반려</strong> · 사유: {rv.reasons.map((x) => RETURN_REASON_LABEL[x as keyof typeof RETURN_REASON_LABEL] ?? x).join(', ')}{rv.otherText ? ` (${rv.otherText})` : ''}</p>
+              <p>재무 의견: {rv.opinion}</p>
+              <p className="meta">{{ open: `회신 기한 ${koDate(rv.dueDate)}`, adjusted: '마케팅이 조정함', kept: '마케팅: 변경 없음(재무 의견을 붙여 상신)', consult: '마케팅: 협의 필요', unanswered: '미응답: 재무 의견을 붙여 결재자에게 자동 전달됨' }[rv.status]}{rv.replyText ? ` · 답변: ${rv.replyText}` : ''}</p>
+            </div>
+          ))}
+          {i.status === 'revision' && role === 'marketing' && (
+            <form action={actRevisionReply} className="hold">{hidden}
+              <label>어떻게 하시겠어요?
+                <select name="kind" defaultValue="adjust">
+                  <option value="adjust">조정함(집행일·요청액 바꾸기)</option>
+                  <option value="keep">변경 없음(재무 의견을 붙여 상신)</option>
+                  <option value="consult">협의 필요</option>
+                </select></label>
+              <label>바꿀 집행일(조정할 때) <input type="date" name="settlementDate" defaultValue={i.settlementDate || undefined} /></label>
+              <label>바꿀 요청액(원, 조정할 때) <input name="amount" inputMode="numeric" placeholder={String(i.amount)} /></label>
+              <label>답변(필수) <input name="text" required /></label>
+              <button type="submit">답변 보내기</button>
+            </form>
+          )}
+        </section>
       )}
       {d.rejection && <div className="flash flash-warn"><strong>거절 사유</strong>: {d.rejection.reason} <small>({ROLE_LABEL[d.rejection.actor as keyof typeof ROLE_LABEL] ?? d.rejection.actor} · {koDate(d.rejection.date)})</small></div>}
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}

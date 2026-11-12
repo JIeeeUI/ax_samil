@@ -3,7 +3,7 @@ import type { IsoDate } from '../engine/types.js';
 import type { Role } from '../workflow/roles.js';
 import { defaultOwnerFor } from '../workflow/ownership.js';
 import type { HoldInput } from '../workflow/status.js';
-import type { Actor, Config, Decision, IntakeService, ReplyValues } from './service.js';
+import type { Actor, ConfigPatch, Decision, IntakeService, ReplyValues } from './service.js';
 
 export type Result = { ok: true } | { ok: false; error: string };
 
@@ -29,7 +29,9 @@ export function decisionFromForm(f: Record<string, string | undefined>): Decisio
 
 export function commands(svc: IntakeService) {
   return {
-    confirmFinance: (id: string, role: Actor) => attempt(() => svc.confirmFinance(id, role)),
+    confirmFinance: (id: string, role: Actor, opinion?: string) => attempt(() => svc.confirmFinance(id, role, { opinion })),
+    financeReturn: (id: string, role: Actor, input: Parameters<IntakeService['financeReturn']>[2]) => attempt(() => svc.financeReturn(id, role, input)),
+    replyRevision: (id: string, role: Actor, input: Parameters<IntakeService['replyRevision']>[2]) => attempt(() => svc.replyRevision(id, role, input)),
     submit: (id: string, role: Actor) => attempt(() => svc.submit(id, role)),
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),
@@ -40,7 +42,7 @@ export function commands(svc: IntakeService) {
     primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
     primaryHold: (id: string, role: Actor, hold: HoldInput) => attempt(() => svc.primaryHold(id, role, hold)),
     primaryReturn: (id: string, role: Actor, reason: string) => attempt(() => svc.primaryReturn(id, role, reason)),
-    setConfig: (patch: Partial<Config>) => attempt(() => svc.setConfig(patch)),
+    setConfig: (patch: ConfigPatch) => attempt(() => svc.setConfig(patch)),
     advanceClock: (to: IsoDate) => attempt(() => svc.advanceClock(to)),
     setScenario: (id: ScenarioId) => attempt(() => svc.setScenario(id)),
     reset: () => attempt(() => svc.reset()),

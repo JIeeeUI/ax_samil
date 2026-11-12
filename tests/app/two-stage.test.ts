@@ -22,7 +22,7 @@ const actions = async (svc: IntakeService, id = CONTRACT) => (await svc.getCase(
 // ---------- 1차/2차 결재 ----------
 test('default config: two-stage off, urgent 10 days, hold cap 3 days, plan current; no review block', async () => {
   const { svc } = await make();
-  expect(await svc.getConfig()).toEqual({ twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current' });
+  expect(await svc.getConfig()).toMatchObject({ twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current' });
   await submitContract(svc);
   expect((await svc.getCase(CONTRACT)).review).toBeNull();
   await svc.decide(CONTRACT, 'ceo_board', 'approve'); // 기존 1단계 흐름 그대로

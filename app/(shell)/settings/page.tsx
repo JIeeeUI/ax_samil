@@ -1,7 +1,8 @@
 import { SCENARIOS, THRESHOLDS } from '../../../src/engine/assumptions.js';
 import { getService } from '../../../src/app/instance.js';
-import { actAdvanceClock, actReset, actSetConfig, actSetScenario } from '../../actions.js';
+import { actAdvanceClock, actReset, actSetConfig, actSetReturnReasons, actSetScenario } from '../../actions.js';
 import { ALERT_PLANS, MESSAGE_TEXT } from '../../../src/workflow/alertPlan.js';
+import { RETURN_REASONS, RETURN_REASON_LABEL, SCHEDULE } from '../../../src/workflow/schedule.js';
 import { ROLE_LABEL } from '../../../src/workflow/roles.js';
 import { Badge, Flash, LABEL_KO, SCENARIO_LABEL, won } from '../../components.js';
 
@@ -77,6 +78,25 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           ))}
         </tbody></table>
         {plan.holdOverdueWarning && <p className="meta">1차 보류가 자기 기한을 넘기면 즉시 대표·CEO에게 경고합니다.</p>}
+      </section>
+
+      <section className="card-block">
+        <h2>재무 반려 사유·역산 일정 <Badge tone="amber">가정</Badge></h2>
+        <p>재무팀이 마케팅에 되돌릴 때(반려) 고를 수 있는 사유예요. 끄면 선택지에서 사라집니다.</p>
+        <form action={actSetReturnReasons} className="hold">{hidden}
+          {RETURN_REASONS.map((k) => <label key={k}><input type="checkbox" name={`rr_${k}`} defaultChecked={cfg.returnReasons[k]} /> {RETURN_REASON_LABEL[k]}</label>)}
+          <button type="submit">반려 사유 저장</button>
+        </form>
+        <h3>시간 규칙은 하나의 원칙: 결정 기한에서 거꾸로 센다</h3>
+        <ul className="plain">
+          <li><strong>결재자 몫</strong>: 결정 기한 3일 전 ~ 당일 (그래서 1차 보류는 기한 {SCHEDULE.approverDays}일 전까지만)</li>
+          <li><strong>재무 재확인 몫</strong>: 기한 5일 전 ~ 3일 전</li>
+          <li><strong>마케팅·협의 몫</strong>: 기한 5일 전 이전</li>
+          <li>반려 회신 기한 = 반려일 + 3일과 (결정 기한 − 5일) 중 이른 날</li>
+          <li>결정 기한까지 5일 이하이면 반려하지 않고 재무 의견을 붙여 바로 상신 · 반려는 건당 한 번(왕복 1회)</li>
+          <li>회신 기한까지 답이 없으면 “미응답”으로 표시하고 재무 의견을 붙여 결재자에게 자동 전달(결정이 아니라 전달)</li>
+        </ul>
+        <p className="meta">기존 값(알림 D-14/7/3, 긴급 10일, 확인 요청 +3일)은 그대로예요.</p>
       </section>
 
       <h2>가정을 바꿔 보기</h2>
