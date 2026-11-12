@@ -57,15 +57,3 @@ test('reset restores the initial state after a scenario ran', async () => {
   expect((await svc.getCase('PLAN-001')).events.map((e) => e.action)).toEqual(['received', 'calculated']);
   expect(v.scenario).toBe('baseline');
 });
-
-test('two-stage demo: blocked shortcuts, hold limit, urgent parallel request and parallel close (switch on)', async () => {
-  const svc = await make();
-  const { facts } = await runScenario(svc, 'twoStage');
-  expect(facts.masilCannotApprove).toBe('ROLE_NOT_ALLOWED');
-  expect(facts.ceoBeforeFirstStage).toBe('SECOND_STAGE_NOT_REQUESTED');
-  expect(facts.holdBeyondCap).toBe('PRIMARY_HOLD_LIMIT');
-  expect(facts.parallelBeforeUrgent).toBe(false);
-  expect(facts.parallelAtUrgent).toBe(true);
-  expect(facts.reviewAtUrgent).toEqual({ state: 'held', parallel: true });
-  expect(facts.afterCeoDecision).toEqual({ status: 'approved', review: 'closed_parallel' });
-});

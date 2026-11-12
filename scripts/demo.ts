@@ -1,5 +1,5 @@
 /**
- * 시연 3건 + 1차/2차 결재 시연 재현. 사용: npm run demo -- normal|change|shortage|twoStage|all
+ * 시연 3건 재현. 사용: npm run demo -- normal|change|shortage|all
  * 로컬 메모리 DB(PGlite)에서 실행하며 시나리오마다 처음부터 초기화한다. 원본 데이터룸은 읽기만 한다.
  * DATABASE_URL이 있으면 그 DB를 초기화하므로 운영 DB에는 쓰지 마세요.
  */
@@ -9,7 +9,7 @@ import { loadDataRoom } from '../src/engine/dataRoom.js';
 import { openDb } from '../src/store/db.js';
 import { Repo } from '../src/store/repo.js';
 
-const NAMES: ScenarioName[] = ['normal', 'change', 'shortage', 'twoStage'];
+const NAMES: ScenarioName[] = ['normal', 'change', 'shortage'];
 const arg = process.argv[2] ?? 'all';
 const todo = arg === 'all' ? NAMES : NAMES.filter((n) => n === arg);
 if (todo.length === 0) {
