@@ -105,8 +105,8 @@ test('reply with an invalid date or amount is rejected and the request stays req
   const { svc } = await make();
   await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
   const req = (await svc.getCase(CONTRACT)).requests[0];
-  await expect(svc.replyInfoRequest(req.id, { text: 'x', values: { cashOutflowDate: '2026-13-45' }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
-  await expect(svc.replyInfoRequest(req.id, { text: 'x', values: { annualFixedFeeKrw: -5 }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
+  await expect(svc.replyInfoRequest(req.id, { actor: 'ceo_board', text: 'x', values: { cashOutflowDate: '2026-13-45' }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
+  await expect(svc.replyInfoRequest(req.id, { actor: 'ceo_board', text: 'x', values: { annualFixedFeeKrw: -5 }, simulated: true })).rejects.toThrow(/INVALID_REPLY/);
   expect((await svc.getCase(CONTRACT)).requests[0].status).toBe('requested');
 });
 
@@ -126,20 +126,20 @@ test('reply cashOutflowDate inside the breach -> CEO_BOARD, outside -> MASIL_CEO
   const inside = await make();
   await inside.svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
   const r1 = (await inside.svc.getCase(CONTRACT)).requests[0];
-  await inside.svc.replyInfoRequest(r1.id, { text: '8/10 지급', values: { cashOutflowDate: '2026-08-10' }, simulated: true });
+  await inside.svc.replyInfoRequest(r1.id, { actor: 'ceo_board', text: '8/10 지급', values: { cashOutflowDate: '2026-08-10' }, simulated: true });
   expect((await inside.svc.getCase(CONTRACT)).item.routeLevel).toBe('CEO_BOARD');
 
   const outside = await make();
   await outside.svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
   const r2 = (await outside.svc.getCase(CONTRACT)).requests[0];
-  await outside.svc.replyInfoRequest(r2.id, { text: '9/30 지급', values: { cashOutflowDate: '2026-09-30' }, simulated: true });
+  await outside.svc.replyInfoRequest(r2.id, { actor: 'ceo_board', text: '9/30 지급', values: { cashOutflowDate: '2026-09-30' }, simulated: true });
   expect((await outside.svc.getCase(CONTRACT)).item.routeLevel).toBe('MASIL_CEO');
 
   const delayed = await make();
   await submitContract(delayed.svc);
   await delayed.svc.decide(CONTRACT, 'ceo_board', { hold: { needed: 'cash_outflow_date', ownerRole: 'finance', dueDate: '2026-07-04' } });
   const r3 = (await delayed.svc.getCase(CONTRACT)).requests.find((r) => r.needed === 'cash_outflow_date' && r.status === 'requested')!;
-  await delayed.svc.replyInfoRequest(r3.id, { text: '아직 미정', simulated: true });
+  await delayed.svc.replyInfoRequest(r3.id, { actor: 'ceo_board', text: '아직 미정', simulated: true });
   const d = await delayed.svc.getCase(CONTRACT);
   expect(d.item.status).toBe('on_hold');
   expect(d.requests.find((r) => r.id === r3.id)!.status).toBe('requested');

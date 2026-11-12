@@ -119,7 +119,7 @@ test('answering the info request of a 1st-stage hold releases the hold', async (
   await submitContract(svc);
   await svc.primaryHold(CONTRACT, 'masil_ceo', hold('2026-07-10'));
   const req = (await svc.getCase(CONTRACT)).requests.find((q) => q.needed === 'payment_schedule')!;
-  await svc.replyInfoRequest(req.id, { text: '지급 일정 첨부', simulated: true, resolved: true });
+  await svc.replyInfoRequest(req.id, { actor: 'ceo_board', text: '지급 일정 첨부', simulated: true, resolved: true });
   expect((await svc.getCase(CONTRACT)).review).toMatchObject({ state: 'pending', holdDue: null });
 });
 

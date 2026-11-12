@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { draftInfoRequest, structureReply } from '../../../src/ai/assist.js';
 import { createProvider } from '../../../src/ai/provider.js';
 import { getService } from '../../../src/app/instance.js';
+import { canReply } from '../../../src/workflow/ownership.js';
 import { ROLE_LABEL, isRole } from '../../../src/workflow/roles.js';
 import { actReply } from '../../actions.js';
 import { Badge, Flash } from '../../components.js';
+import { currentRole } from '../../session.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,7 @@ export default async function Requests({
   const { error, req, text, draft } = await searchParams;
   const svc = await getService();
   const today = (await svc.getClock()).today;
+  const role = await currentRole();
   const v = await svc.listToday();
   const name = new Map(v.items.map((i) => [i.id, i.influencer]));
   const status = new Map(v.items.map((i) => [i.id, i.status]));
@@ -45,6 +48,8 @@ export default async function Requests({
       {open.length === 0 && <p>답을 기다리는 요청이 없습니다. 건 상세에서 “보류”를 누르면 여기에 생겨요.</p>}
       {open.map((q) => {
         const late = q.dueDate < today;
+        const can = canReply(role, q.ownerRole);
+        const ownerName = isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole;
         const isContractDate = q.caseId === CONTRACT && (q.needed === 'cash_outflow_date' || q.needed === 'payment_schedule');
         const typed = req && String(q.id) === req ? text : '';
         const prefill = extracted && String(q.id) === req ? extracted.candidates : {};
@@ -64,7 +69,9 @@ export default async function Requests({
             </p>
             {q.replyText && <p className="meta">앞서 받은 답변(필요한 값이 없어 계속 기다리는 중): {q.replyText}</p>}
 
-            {isContractDate ? (
+            {!can ? (
+              <p className="meta">{ownerName}의 회신을 기다리는 중이에요. 지금 보는 사람({ROLE_LABEL[role]})은 답변을 입력할 수 없어요(담당 또는 결재자만 가능).</p>
+            ) : isContractDate ? (
               <form action={actReply} className="hold">
                 <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" />
                 <label>돈이 나가는 날짜 <input type="date" name="cashOutflowDate" defaultValue={prefill.cashOutflowDate ?? ''} /></label>
@@ -84,7 +91,7 @@ export default async function Requests({
               {draftOut && draftReq?.id === q.id && (
                 <blockquote>{draftOut.text} <small>({draftOut.source === 'ai' ? 'AI 작성' : '자동 작성'}{draftOut.note && ` · ${draftOut.note}`})</small></blockquote>
               )}
-              {isContractDate && (
+              {can && isContractDate && (
                 <>
                   <p>미리 만들어 둔 답변으로 시연해 볼 수 있어요.</p>
                   <div className="actions">

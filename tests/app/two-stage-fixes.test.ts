@@ -51,7 +51,7 @@ test('review #3: a 1st-stage hold whose request is closed by a same-topic reply 
   await submitContract(svc); // confirmFinance가 cash_outflow_date 확인 요청을 이미 만든다
   await svc.primaryHold(CONTRACT, 'masil_ceo', hold('cash_outflow_date', '2026-07-10'));
   const auto = (await open(svc)).find((q) => q.dueDate !== '2026-07-10')!;
-  await svc.replyInfoRequest(auto.id, { text: '8/10 지급', values: { cashOutflowDate: '2026-08-10' }, simulated: true });
+  await svc.replyInfoRequest(auto.id, { actor: 'ceo_board', text: '8/10 지급', values: { cashOutflowDate: '2026-08-10' }, simulated: true });
   expect((await svc.getCase(CONTRACT)).review).toMatchObject({ state: 'pending', holdDue: null });
 });
 
@@ -83,15 +83,15 @@ test('review #5: a CEO hold is not a decision, and answering the 1st-stage reque
   let d = await svc.getCase(CONTRACT);
   expect(d.item.status).toBe('on_hold');
   expect(d.review!.state).not.toBe('closed_parallel'); // CEO 보류는 결정이 아니므로 1차를 닫지 않는다
-  await svc.replyInfoRequest(a.id, { text: '자료 첨부', simulated: true, resolved: true });
+  await svc.replyInfoRequest(a.id, { actor: 'ceo_board', text: '자료 첨부', simulated: true, resolved: true });
   d = await svc.getCase(CONTRACT);
   expect(d.item.status).toBe('on_hold'); // CEO의 질문(board_question)은 아직 답이 없다
   const b = (await open(svc)).find((q) => q.needed === 'board_question')!;
-  await svc.replyInfoRequest(b.id, { text: '답변', simulated: true, resolved: true });
+  await svc.replyInfoRequest(b.id, { actor: 'ceo_board', text: '답변', simulated: true, resolved: true });
   // 계약에는 자동 생성된 현금 유출일 확인 요청도 열려 있어, 열린 요청이 모두 답변될 때까지 보류가 유지된다.
   expect((await svc.getCase(CONTRACT)).item.status).toBe('on_hold');
   const auto = (await open(svc)).find((q) => q.needed === 'cash_outflow_date')!;
-  await svc.replyInfoRequest(auto.id, { text: '9/30 지급', values: { cashOutflowDate: '2026-09-30' }, simulated: true });
+  await svc.replyInfoRequest(auto.id, { actor: 'ceo_board', text: '9/30 지급', values: { cashOutflowDate: '2026-09-30' }, simulated: true });
   expect((await svc.getCase(CONTRACT)).item.status).toBe('routed');
 });
 

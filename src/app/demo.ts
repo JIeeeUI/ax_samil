@@ -1,4 +1,5 @@
 import type { IsoDate } from '../engine/types.js';
+import type { Role } from '../workflow/roles.js';
 import { CONTRACT_ID, type IntakeService, type ReplyValues } from './service.js';
 
 export type ScenarioName = 'normal' | 'change' | 'shortage';
@@ -16,6 +17,11 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
   const openRequest = async (needed = 'cash_outflow_date') =>
     (await svc.getCase(CONTRACT_ID)).requests.find((r) => r.needed === needed && r.status === 'requested')!;
   const route = async (id: string) => (await svc.getCase(id)).item.routeLevel;
+  /** 열린 확인 요청에 담당 역할로 회신한다(모의). */
+  const replyOpen = async (input: Omit<Parameters<IntakeService['replyInfoRequest']>[1], 'actor'>) => {
+    const q = await openRequest();
+    await svc.replyInfoRequest(q.id, { ...input, actor: q.ownerRole as Role });
+  };
   const submitContract = async () => {
     await svc.confirmFinance(CONTRACT_ID, 'finance');
     await svc.submit(CONTRACT_ID, 'marketing');
@@ -56,7 +62,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
       deferredNote: d9.notes.some((n) => n.includes('금액 판단 유보')),
     };
     say(`고정 피 연 9억 원: 경로 ${d9.item.routeLevel}, 현금 유출일 확인 요청 생성`);
-    await svc.replyInfoRequest((await openRequest()).id, {
+    await replyOpen({
       text: `회신(모의): ${IN_BREACH} 지급`, values: { cashOutflowDate: IN_BREACH }, simulated: true,
     });
     facts.reply0810Route = await route(CONTRACT_ID);
@@ -64,7 +70,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
 
     await svc.reset();
     await svc.proposeContractChange({ annualFixedFeeKrw: 900_000_000 });
-    await svc.replyInfoRequest((await openRequest()).id, {
+    await replyOpen({
       text: `회신(모의): ${AFTER_BREACH} 지급`, values: { cashOutflowDate: AFTER_BREACH }, simulated: true,
     });
     facts.reply0930Route = await route(CONTRACT_ID);
@@ -93,7 +99,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
     facts.escalationOptions = (await svc.getCase(CONTRACT_ID)).escalation;
 
     const reply = async (label: string, values: ReplyValues | undefined) => {
-      await svc.replyInfoRequest((await openRequest()).id, { text: `${label} 회신(모의)`, values, simulated: true });
+      await replyOpen({ text: `${label} 회신(모의)`, values, simulated: true });
       const d = await svc.getCase(CONTRACT_ID);
       return { status: d.item.status, route: d.item.routeLevel, inBreach: d.item.inBreach };
     };
@@ -107,7 +113,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
 
     await prepare();
     await svc.advanceClock('2026-07-14');
-    await svc.replyInfoRequest((await openRequest()).id, { text: '지연 회신(모의): 일정 미정', simulated: true });
+    await replyOpen({ text: '지연 회신(모의): 일정 미정', simulated: true });
     const dd = await svc.getCase(CONTRACT_ID);
     facts.delayed = {
       status: dd.item.status,

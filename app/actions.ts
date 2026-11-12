@@ -7,6 +7,7 @@ import { commands, decisionFromForm, type Result } from '../src/app/commands.js'
 import { getService } from '../src/app/instance.js';
 import { SCENARIOS, type ScenarioId } from '../src/engine/assumptions.js';
 import type { Config } from '../src/app/service.js';
+import { defaultOwnerFor } from '../src/workflow/ownership.js';
 import { isRole, type Role } from '../src/workflow/roles.js';
 import { currentRole } from './session.js';
 
@@ -52,7 +53,7 @@ export async function actReply(fd: FormData) {
   const fee = num(field(fd, 'fee'));
   const values = { ...(date ? { cashOutflowDate: date } : {}), ...(fee !== undefined ? { annualFixedFeeKrw: fee } : {}) };
   const hasValues = Object.keys(values).length > 0;
-  return done(fd, await (await cmd()).reply(Number(field(fd, 'requestId')), field(fd, 'text'), hasValues ? values : undefined, true, field(fd, 'resolved') === '1'));
+  return done(fd, await (await cmd()).reply(Number(field(fd, 'requestId')), await currentRole(), field(fd, 'text'), hasValues ? values : undefined, true, field(fd, 'resolved') === '1'));
 }
 
 export async function actProposeChange(fd: FormData) {
@@ -69,7 +70,7 @@ export async function actPrimary(fd: FormData) {
   if (op === 'escalate') return done(fd, await c.primaryEscalate(id, role));
   if (op === 'return') return done(fd, await c.primaryReturn(id, role));
   if (op === 'hold') {
-    return done(fd, await c.primaryHold(id, role, { needed: field(fd, 'holdNeeded'), ownerRole: field(fd, 'holdOwner') as Role, dueDate: field(fd, 'holdDue') }));
+    return done(fd, await c.primaryHold(id, role, { needed: field(fd, 'holdNeeded'), ownerRole: (field(fd, 'holdOwner') || defaultOwnerFor(field(fd, 'holdNeeded'))) as Role, dueDate: field(fd, 'holdDue') }));
   }
   return done(fd, { ok: false, error: `INVALID_OP: ${op}` });
 }

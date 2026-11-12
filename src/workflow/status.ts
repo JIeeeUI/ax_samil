@@ -32,8 +32,9 @@ const TABLE: Record<Status, Partial<Record<Action, { to: Status; by: Allowed }>>
   },
   on_hold: { reply: { to: 'routed', by: ANY_ROLE }, expire: { to: 'overdue', by: ['system'] } },
   rejected: {
-    resubmit: { to: 'submitted', by: ['marketing', 'finance'] },
-    close: { to: 'closed', by: ['marketing', 'finance'] },
+    // 거절 후 재상신·종결은 마케팅만(재무는 재확인 안내만 본다) [교육용 가정]
+    resubmit: { to: 'submitted', by: ['marketing'] },
+    close: { to: 'closed', by: ['marketing'] },
     expire: { to: 'overdue', by: ['system'] },
   },
   approved: {}, overdue: {}, closed: {},

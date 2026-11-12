@@ -9,6 +9,7 @@ import type { DataRoom, IsoDate } from '../engine/types.js';
 import type { AlertRow, Clock, EventRow, InfoRequestRow, Repo, ReviewRow } from '../store/repo.js';
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
 import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
+import { canReply, defaultOwnerFor } from '../workflow/ownership.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
 
@@ -37,7 +38,7 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -112,7 +113,7 @@ export class IntakeService {
       let due = addDays(c.clock.today, 3);
       if (due > eff) due = eff;
       if (due < c.clock.today) due = c.clock.today;
-      await this.repo.addInfoRequest({ caseId: id, needed, ownerRole: 'finance', dueDate: due, createdDate: c.clock.today, simulated });
+      await this.repo.addInfoRequest({ caseId: id, needed, ownerRole: defaultOwnerFor(needed), dueDate: due, createdDate: c.clock.today, simulated });
     }
   }
 
@@ -190,6 +191,7 @@ export class IntakeService {
   // ---------- 조회 ----------
   private buildItems(
     c: Computed, statuses: Map<string, { status: Status; routeLevel: RouteLevel }>, reviews: Map<string, ReviewRow>, twoStage: boolean,
+    owners: Map<string, Role[]>,
   ): TodayItem[] {
     const byId = new Map(c.intake.map((r) => [r.제안ID, r]));
     return c.cases.map((k) => {
@@ -200,6 +202,7 @@ export class IntakeService {
         amount: k.amount, scale: row.금액규모, deadline: k.deadline, settlementDate: row.집행예정일,
         effectiveDeadline: k.effectiveDeadline, daysLeft: row.남은일수, alertStage: row.알림단계,
         status: st.status, routeLevel: st.routeLevel, routeLabel: ROUTE_LABEL[st.routeLevel],
+        openRequestOwners: owners.get(k.id) ?? [],
         primaryPending: twoStage && st.routeLevel === 'CEO_BOARD' && st.status === 'submitted' && (() => {
           const rv = reviews.get(k.id);
           return (!rv || rv.state === 'pending' || rv.state === 'held') && !(rv?.parallel);
@@ -209,6 +212,18 @@ export class IntakeService {
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
       };
     }).sort((x, y) => x.effectiveDeadline.localeCompare(y.effectiveDeadline) || x.id.localeCompare(y.id));
+  }
+
+  /** 건별로 열린 확인 요청의 담당 역할(중복 제거) */
+  private async ownerMap(): Promise<Map<string, Role[]>> {
+    const m = new Map<string, Role[]>();
+    for (const q of await this.repo.listInfoRequests({ status: 'requested' })) {
+      if (!isRole(q.ownerRole)) continue;
+      const cur = m.get(q.caseId) ?? [];
+      if (!cur.includes(q.ownerRole)) cur.push(q.ownerRole);
+      m.set(q.caseId, cur);
+    }
+    return m;
   }
 
   private async reviewMap() {
@@ -224,7 +239,7 @@ export class IntakeService {
     const sm = await this.statusMap();
     return {
       asOf: c.clock.asOf, today: c.clock.today, scenario: c.scenario, assumptionVersion: c.a.version,
-      breaches: c.cash.breaches, items: this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage),
+      breaches: c.cash.breaches, items: this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage, await this.ownerMap()),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([k, v]) => [k, v.status]))),
       openRequests: (await this.repo.listInfoRequests({ status: 'requested' })).length,
     };
@@ -235,7 +250,7 @@ export class IntakeService {
     const sm = await this.statusMap();
     const k = c.cases.find((x) => x.id === id);
     if (!k) throw new Error(`UNKNOWN_CASE: ${id}`);
-    const item = this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage).find((i) => i.id === id)!;
+    const item = this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage, await this.ownerMap()).find((i) => i.id === id)!;
     const route = c.routes.get(id)!;
     const events = await this.repo.listEvents(id);
     // 종결된 건은 결정 당시의 근거를 보여 준다(이후 가정이 바뀌어도 화면이 모순되지 않게).
@@ -376,10 +391,15 @@ export class IntakeService {
     await this.ensureInfoRequests(c, CONTRACT_ID, true);
   }
 
-  async replyInfoRequest(requestId: number, input: { text: string; values?: ReplyValues; simulated: boolean; resolved?: boolean }): Promise<void> {
+  async replyInfoRequest(requestId: number, input: { actor: Actor; text: string; values?: ReplyValues; simulated: boolean; resolved?: boolean }): Promise<void> {
     const req = await this.repo.getInfoRequest(requestId);
     if (!req) throw new Error(`UNKNOWN_REQUEST: ${requestId}`);
     if (req.status !== 'requested') throw new Error(`REQUEST_NOT_OPEN: 요청 ${requestId}: 현재 상태 ${req.status}`);
+    // 회신은 담당 역할과 결재 역할(대표·CEO/이사회, 대신 입력)만 입력할 수 있다 [교육용 가정].
+    if (!canReply(input.actor, req.ownerRole)) {
+      const owner = isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : req.ownerRole;
+      throw new Error(`ROLE_NOT_ALLOWED: 이 확인 요청은 ${owner}(또는 결재자)만 회신할 수 있습니다(${input.actor})`);
+    }
     const caseState = await this.requireState(req.caseId);
     if (TERMINAL.has(caseState.status)) throw new Error(`CASE_CLOSED: ${req.caseId}: 현재 상태 ${caseState.status}라 회신을 반영할 수 없습니다`);
     const v = input.values ?? {};
@@ -396,18 +416,17 @@ export class IntakeService {
       const st0 = await this.requireState(req.caseId);
       const othersOpen0 = (await this.repo.listInfoRequests({ status: 'requested', caseId: req.caseId })).some((o) => o.id !== requestId);
       if (st0.status === 'on_hold' && !othersOpen0) {
-        const owner: Actor = isRole(req.ownerRole) ? req.ownerRole : 'finance';
-        const next = transition(st0, 'reply', owner);
+        const next = transition(st0, 'reply', input.actor);
         await this.repo.transitionState(req.caseId, 'on_hold', { status: next, routeLevel: c0.routes.get(req.caseId)!.level, updatedBusinessDate: c0.clock.today });
       }
-      await this.log(c0, req.caseId, isRole(req.ownerRole) ? req.ownerRole : 'finance', 'reply', {
+      await this.log(c0, req.caseId, input.actor, 'reply', {
         simulated: input.simulated, detail: { resolved: true, text: input.text },
       });
       return;
     }
     if (!hasValues) {
       await this.repo.updateInfoRequest(requestId, { replyText: input.text, simulated: input.simulated });
-      await this.log(c0, req.caseId, req.ownerRole as Actor, 'reply_pending', { simulated: input.simulated, detail: { text: input.text } });
+      await this.log(c0, req.caseId, input.actor, 'reply_pending', { simulated: input.simulated, detail: { text: input.text } });
       return;
     }
     if (req.caseId === CONTRACT_ID) {
@@ -427,13 +446,12 @@ export class IntakeService {
     const st = await this.requireState(req.caseId);
     const othersOpen = (await this.repo.listInfoRequests({ status: 'requested', caseId: req.caseId })).some((o) => o.id !== requestId);
     if (st.status === 'on_hold' && !othersOpen) {
-      const owner: Actor = isRole(req.ownerRole) ? req.ownerRole : 'finance';
-      const next = transition(st, 'reply', owner);
+      const next = transition(st, 'reply', input.actor);
       await this.repo.upsertState({ caseId: st.caseId, status: next, routeLevel: c.routes.get(st.caseId)!.level, updatedBusinessDate: c.clock.today });
     } else {
       await this.rejudge(c, st.caseId);
     }
-    await this.log(c, req.caseId, isRole(req.ownerRole) ? req.ownerRole : 'finance', 'reply', {
+    await this.log(c, req.caseId, input.actor, 'reply', {
       simulated: input.simulated, detail: { values: v, text: input.text, owner: ROLE_LABEL[req.ownerRole as Role] ?? req.ownerRole },
     });
     await this.ensureInfoRequests(c, req.caseId, input.simulated);

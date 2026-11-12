@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { summarizeForApproval } from '../../../../src/ai/assist.js';
 import { createProvider } from '../../../../src/ai/provider.js';
 import { getService } from '../../../../src/app/instance.js';
+import { defaultOwnerFor } from '../../../../src/workflow/ownership.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
 import {
   actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
@@ -52,7 +53,7 @@ export default async function CasePage({
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><button type="submit" className="danger">거절</button></form>
             </div>
           )}
-          {i.status === 'rejected' && (role === 'marketing' || role === 'finance') && (
+          {i.status === 'rejected' && role === 'marketing' && (
             <div className="two"><form action={actResubmit}>{hidden}<button type="submit">다시 올리기</button></form><form action={actClose}>{hidden}<button type="submit" className="secondary">종결</button></form></div>
           )}
         </div>
@@ -61,7 +62,7 @@ export default async function CasePage({
         <details className="fold"><summary>정보가 더 필요하면 보류하기</summary>
           <form action={actDecide} className="hold">{hidden}<input type="hidden" name="decision" value="hold" />
             <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
-            <label>누가 확인하나요? <select name="holdOwner" defaultValue="finance">{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
+            <label>누가 확인하나요? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
             <label>언제까지 답을 받나요? <input type="date" name="holdDue" required /></label>
             <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
           </form>
@@ -92,7 +93,7 @@ export default async function CasePage({
                 <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>
                   <form action={actPrimary} className="hold">{hidden}<input type="hidden" name="op" value="hold" />
                     <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
-                    <label>누가 확인하나요? <select name="holdOwner" defaultValue="finance">{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
+                    <label>누가 확인하나요? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
                     <label>언제까지 답을 받나요? (최대 {d.review.holdCapDate}) <input type="date" name="holdDue" max={d.review.holdCapDate} required /></label>
                     <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
                   </form>

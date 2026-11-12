@@ -51,10 +51,18 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
     }
     return role === decider ? { kind: 'mine', text: '승인·거절·보류 중에서 결정해 주세요' } : { kind: 'waiting', text: `${ROLE_LABEL[decider]}의 결정을 기다리는 중` };
   }
-  if (s === 'on_hold') return { kind: 'waiting', text: '확인 요청에 회신이 오기를 기다리는 중' };
+  if (s === 'on_hold') {
+    // 열린 확인 요청의 담당 역할만 "내 차례". 결재자는 대신 입력할 수 있지만 내 차례는 아니다.
+    if (item.openRequestOwners.includes(role)) return { kind: 'mine', text: '확인 요청에 회신해 주세요' };
+    const names = item.openRequestOwners.map((r) => ROLE_LABEL[r]).join('·') || '담당 부서';
+    const proxy = role === 'masil_ceo' || role === 'ceo_board' ? ' (결재자는 대신 입력할 수도 있어요)' : '';
+    return { kind: 'waiting', text: `${names}의 회신을 기다리는 중${proxy}` };
+  }
   if (s === 'rejected') {
-    return role === 'marketing' || role === 'finance'
-      ? { kind: 'mine', text: '다시 올릴지(재상신) 끝낼지(종결) 정해 주세요' } : { kind: 'waiting', text: '마케팅·재무팀의 후속 처리를 기다리는 중' };
+    if (role === 'marketing') return { kind: 'mine', text: '다시 올릴지(재상신) 끝낼지(종결) 정해 주세요' };
+    return role === 'finance'
+      ? { kind: 'waiting', text: '다시 올리기 전에 재확인할 내용을 살펴봐 주세요(재상신·종결은 마케팅이 해요)' }
+      : { kind: 'waiting', text: `${ROLE_LABEL.marketing}의 후속 처리를 기다리는 중` };
   }
   return { kind: 'waiting', text: STATUS_PLAIN[s] };
 }

@@ -48,7 +48,7 @@ test('final #3: a reply on an approved contract is refused and its open requests
   const open = (await svc.getCase(CONTRACT)).requests.find((q) => q.status === 'requested')!;
   await svc.decide(CONTRACT, 'ceo_board', 'approve');
   expect((await svc.getCase(CONTRACT)).requests.every((q) => q.status !== 'requested')).toBe(true);
-  await expect(svc.replyInfoRequest(open.id, { text: 'x', values: { annualFixedFeeKrw: 900_000_000 }, simulated: true })).rejects.toThrow(/CASE_CLOSED|REQUEST_NOT_OPEN/);
+  await expect(svc.replyInfoRequest(open.id, { actor: 'ceo_board', text: 'x', values: { annualFixedFeeKrw: 900_000_000 }, simulated: true })).rejects.toThrow(/CASE_CLOSED|REQUEST_NOT_OPEN/);
   expect((await svc.getCase(CONTRACT)).penalty).toBe(1_400_000_000);
 });
 
@@ -71,7 +71,7 @@ test('final #5: a held plan can be released with a values-free resolution', asyn
   await svc.submit(id, 'marketing');
   await svc.decide(id, 'masil_ceo', { hold: { needed: 'extra_data', ownerRole: 'marketing', dueDate: '2026-07-04' } });
   const req = (await svc.getCase(id)).requests.find((q) => q.needed === 'extra_data')!;
-  await svc.replyInfoRequest(req.id, { text: '추가 자료 첨부', simulated: true, resolved: true });
+  await svc.replyInfoRequest(req.id, { actor: 'ceo_board', text: '추가 자료 첨부', simulated: true, resolved: true });
   const d = await svc.getCase(id);
   expect(d.item.status).toBe('routed');
   expect(d.requests.find((q) => q.id === req.id)!.status).toBe('replied');
@@ -86,8 +86,8 @@ test('9억 variant: performance-fee terms are requested once, shown as provision
   expect(d.notes.join(' ')).toContain('잠정 경로');
   const perf = d.requests.filter((q) => q.needed === 'performance_fee_terms');
   expect(perf).toHaveLength(1);
-  expect(perf[0]).toMatchObject({ ownerRole: 'finance', status: 'requested' });
-  await svc.replyInfoRequest(perf[0].id, { text: '성과 피는 별도 정산, 10억 이하 확인', simulated: true, resolved: true });
+  expect(perf[0]).toMatchObject({ ownerRole: 'contract', status: 'requested' }); // 성과 피 정산 조건은 계약 담당이 가진 정보
+  await svc.replyInfoRequest(perf[0].id, { actor: 'ceo_board', text: '성과 피는 별도 정산, 10억 이하 확인', simulated: true, resolved: true });
   d = await svc.getCase(CONTRACT);
   expect(d.requests.filter((q) => q.needed === 'performance_fee_terms')).toHaveLength(1); // 다시 만들지 않는다
   expect(d.requests.find((q) => q.id === perf[0].id)!.status).toBe('replied');

@@ -1,6 +1,7 @@
 import type { ScenarioId } from '../engine/assumptions.js';
 import type { IsoDate } from '../engine/types.js';
 import type { Role } from '../workflow/roles.js';
+import { defaultOwnerFor } from '../workflow/ownership.js';
 import type { HoldInput } from '../workflow/status.js';
 import type { Actor, Config, Decision, IntakeService, ReplyValues } from './service.js';
 
@@ -20,7 +21,7 @@ export async function attempt(fn: () => Promise<unknown>): Promise<Result> {
 export function decisionFromForm(f: Record<string, string | undefined>): Decision {
   if (f.decision === 'approve' || f.decision === 'reject') return f.decision;
   if (f.decision === 'hold') {
-    return { hold: { needed: f.holdNeeded ?? '', ownerRole: (f.holdOwner ?? '') as Role, dueDate: f.holdDue ?? '' } };
+    return { hold: { needed: f.holdNeeded ?? '', ownerRole: ((f.holdOwner ?? '') || defaultOwnerFor(f.holdNeeded ?? '')) as Role, dueDate: f.holdDue ?? '' } };
   }
   throw new Error(`INVALID_DECISION: ${String(f.decision)}`);
 }
@@ -32,8 +33,8 @@ export function commands(svc: IntakeService) {
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),
     close: (id: string, role: Actor) => attempt(() => svc.close(id, role)),
-    reply: (requestId: number, text: string, values: ReplyValues | undefined, simulated: boolean, resolved = false) =>
-      attempt(() => svc.replyInfoRequest(requestId, { text, values, simulated, resolved })),
+    reply: (requestId: number, actor: Actor, text: string, values: ReplyValues | undefined, simulated: boolean, resolved = false) =>
+      attempt(() => svc.replyInfoRequest(requestId, { actor, text, values, simulated, resolved })),
     proposeChange: (fee: number, cashOutflowDate?: IsoDate | null) =>
       attempt(() => svc.proposeContractChange({ annualFixedFeeKrw: fee, cashOutflowDate })),
     primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
