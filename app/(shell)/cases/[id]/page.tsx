@@ -123,8 +123,8 @@ export default async function CasePage({
           {i.status === 'revision' && role === 'marketing' && (
             <form action={actRevisionReply} className="hold">{hidden}
               <label>어떻게 하시겠어요?
-                <select name="kind" defaultValue="adjust">
-                  <option value="adjust">조정함(집행일·요청액 바꾸기)</option>
+                <select name="kind" defaultValue={i.kind === 'plan' ? 'adjust' : 'keep'}>
+                  {i.kind === 'plan' && <option value="adjust">조정함(집행일·요청액 바꾸기)</option>}
                   <option value="keep">변경 없음(재무 의견을 붙여 상신)</option>
                   <option value="consult">협의 필요</option>
                 </select></label>

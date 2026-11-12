@@ -9,7 +9,7 @@ import type { DataRoom, IsoDate } from '../engine/types.js';
 import type { AlertRow, Clock, EventRow, InfoRequestRow, NoticeRow, Repo, RevisionRow, ReviewRow } from '../store/repo.js';
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
 import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
-import { canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
+import { SCHEDULE, canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
 import { canChangeContract, canReply, defaultOwnerFor, replyKeysFor } from '../workflow/ownership.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
@@ -234,22 +234,28 @@ export class IntakeService {
         raised.push({ caseId: st.caseId, stage: 'overdue', kind: 'expired' });
         continue;
       }
-      if (status === 'revision' && (await this.forwardUnanswered(c, st.caseId, st.routeLevel))) status = 'submitted';
+      if ((status === 'revision' || status === 'consulting') && (await this.forwardUnanswered(c, st.caseId, st.routeLevel, status))) status = 'submitted';
       raised.push(...(await this.runPlan(c, cfg, activated, { ...st, status }, k)));
     }
     return raised;
   }
 
   /** 반려 회신 기한까지 답이 없으면 "미응답"으로 표시하고 재무 의견을 붙여 결재자에게 전달한다(결정이 아니라 전달). */
-  private async forwardUnanswered(c: Computed, caseId: string, routeLevel: string): Promise<boolean> {
-    const open = (await this.repo.listRevisions(caseId)).find((r) => r.status === 'open');
+  private async forwardUnanswered(c: Computed, caseId: string, routeLevel: string, from: 'revision' | 'consulting' = 'revision'): Promise<boolean> {
+    // 협의 중인 건은 협의 결과 입력이 같은 기한까지 없으면 "협의 미완료"로 전달한다(결과 입력은 금요일 범위).
+    const open = (await this.repo.listRevisions(caseId)).find((r) => r.status === (from === 'revision' ? 'open' : 'consult'));
     if (!open || open.dueDate >= c.clock.today) return false;
-    if (!(await this.repo.transitionState(caseId, 'revision', { status: 'submitted', routeLevel, updatedBusinessDate: c.clock.today }))) return false;
-    await this.repo.closeRevision(open.id, 'unanswered', null, c.clock.today);
+    if (!(await this.repo.transitionState(caseId, from, { status: 'submitted', routeLevel, updatedBusinessDate: c.clock.today }))) return false;
+    await this.repo.closeRevision(open.id, 'unanswered', null, c.clock.today, open.status);
     await this.log(c, caseId, 'system', 'revision_unanswered', {
       simulated: false,
-      detail: { dueDate: open.dueDate, financeOpinion: open.opinion, reasons: open.reasons.map((x) => RETURN_REASON_LABEL_KO[x as ReturnReason] ?? x), message: '반려 회신 기한까지 미응답: 재무 의견을 붙여 결재자에게 전달' },
+      detail: {
+        dueDate: open.dueDate, financeOpinion: open.opinion, reasons: open.reasons.map((x) => RETURN_REASON_LABEL_KO[x as ReturnReason] ?? x),
+        message: from === 'revision' ? '반려 회신 기한까지 미응답: 재무 의견을 붙여 결재자에게 전달' : '협의 미완료: 재무 의견을 붙여 결재자에게 전달',
+      },
     });
+    // 일반 재무 확인을 거치지 않고 올라가므로 필요한 확인 요청을 여기서 만든다.
+    await this.ensureInfoRequests(await this.compute(), caseId, false);
     return true;
   }
 
@@ -395,6 +401,14 @@ export class IntakeService {
 
   async confirmFinance(id: string, actor: Actor, opts: { opinion?: string } = {}): Promise<void> {
     const opinion = opts.opinion?.trim();
+    // 반려할 수 없는 경우(왕복 1회를 썼거나 기한까지 5일 이하)에는 의견을 붙여 상신해야 한다.
+    const st0 = await this.requireState(id);
+    if (st0.status === 'finance_review' && !opinion) {
+      const c0 = await this.compute();
+      if (!(await this.returnState(c0, id, c0.cases.find((k) => k.id === id)!.effectiveDeadline)).allowed && (await this.repo.listRevisions(id)).length > 0) {
+        throw new Error('OPINION_REQUIRED: 이미 반려한 건은 재무 의견을 붙여 상신해야 합니다');
+      }
+    }
     const c = await this.act(id, actor, 'confirm_finance', { rejudge: true, ...(opinion ? { detail: { financeOpinion: opinion } } : {}) });
     await this.ensureInfoRequests(c, id, false);
   }
@@ -417,8 +431,13 @@ export class IntakeService {
     const rs = await this.returnState(c, id, c.cases.find((k) => k.id === id)!.effectiveDeadline);
     if (!rs.allowed) throw new Error(`${(await this.repo.listRevisions(id)).length > 0 ? 'ROUND_LIMIT' : 'RETURN_NOT_ALLOWED'}: ${rs.why}`);
     const round = (await this.repo.listRevisions(id)).length + 1;
-    await this.act(id, actor, 'finance_return', { detail: { reasons, otherText, opinion, dueDate: rs.dueIfReturnedToday, round } });
-    await this.repo.addRevision({ caseId: id, round, reasons, otherText: otherText || undefined, opinion, returnDate: c.clock.today, dueDate: rs.dueIfReturnedToday });
+    const revId = await this.repo.addRevision({ caseId: id, round, reasons, otherText: otherText || undefined, opinion, returnDate: c.clock.today, dueDate: rs.dueIfReturnedToday });
+    try {
+      await this.act(id, actor, 'finance_return', { detail: { reasons, otherText, opinion, dueDate: rs.dueIfReturnedToday, round } });
+    } catch (e) {
+      await this.repo.deleteRevision(revId);
+      throw e;
+    }
   }
 
   /** 마케팅의 반려 회신: 조정함 / 변경 없음 / 협의 필요 */
@@ -432,8 +451,9 @@ export class IntakeService {
     if (text === '') throw new Error('TEXT_REQUIRED: 회신 내용을 입력해야 합니다');
     const c0 = await this.compute();
     if (input.kind === 'keep' || input.kind === 'consult') {
-      await this.act(id, actor, input.kind, { detail: { text, financeOpinion: open.opinion } });
+      const cc = await this.act(id, actor, input.kind, { detail: { text, financeOpinion: open.opinion } });
       await this.repo.closeRevision(open.id, input.kind === 'keep' ? 'kept' : 'consult', text, c0.clock.today);
+      if (input.kind === 'keep') await this.ensureInfoRequests(cc, id, false);
       return;
     }
     if (input.kind !== 'adjust') throw new Error(`INVALID_ADJUSTMENT: 알 수 없는 회신 종류(${String(input.kind)})`);
@@ -443,7 +463,7 @@ export class IntakeService {
     const changes: AdjustmentRecord[] = [];
     if (input.settlementDate !== undefined) {
       if (!isIsoDate(input.settlementDate)) throw new Error('INVALID_ADJUSTMENT: 집행일이 날짜가 아닙니다');
-      if (input.settlementDate < c0.clock.today) throw new Error('INVALID_ADJUSTMENT: 집행일은 오늘 이후여야 합니다');
+      if (input.settlementDate < addDays(c0.clock.today, SCHEDULE.noReturnWithinDays)) throw new Error(`INVALID_ADJUSTMENT: 집행일은 오늘부터 ${SCHEDULE.noReturnWithinDays}일 뒤 이후여야 합니다(결정 기한이 당겨지지 않게)`);
       if (input.settlementDate !== k.settlementDate) { patch.settlementDate = input.settlementDate; changes.push({ field: 'settlementDate', from: k.settlementDate ?? '', to: input.settlementDate, date: c0.clock.today }); }
     }
     if (input.amount !== undefined) {
@@ -451,15 +471,12 @@ export class IntakeService {
       if (input.amount !== k.amount) { patch.amount = input.amount; changes.push({ field: 'amount', from: k.amount, to: input.amount, date: c0.clock.today }); }
     }
     if (changes.length === 0) throw new Error('INVALID_ADJUSTMENT: 바뀐 집행일 또는 요청액이 없습니다(바꾸지 않으려면 "변경 없음"을 고르세요)');
+    // 먼저 상태 전이를 선점한 한 요청만 조정값을 쓴다(진 요청이 이긴 요청의 값을 지우지 않게).
+    await this.act(id, actor, 'adjust', { detail: { text, changes } });
     const prev = (await this.repo.getSetting<Adjustments>('adjustments')) ?? {};
     await this.repo.setSetting('adjustments', { ...prev, [id]: { ...prev[id], ...patch } });
-    try {
-      await this.act(id, actor, 'adjust', { rejudge: true, detail: { text, changes } });
-    } catch (e) {
-      await this.repo.setSetting('adjustments', prev);
-      throw e;
-    }
     await this.repo.closeRevision(open.id, 'adjusted', text, c0.clock.today);
+    await this.rejudge(await this.compute(), id);
   }
 
   async submit(id: string, actor: Actor): Promise<void> {
@@ -531,7 +548,7 @@ export class IntakeService {
 
   private async voidNotice(): Promise<void> {
     const n = await this.repo.getNotice(CONTRACT_ID);
-    if (!n || n.status === 'done' || n.status === 'void') return;
+    if (!n || n.status !== 'open') return; // 이미 발송된 통보는 취소하지 않는다
     await this.repo.updateNotice(CONTRACT_ID, n.status, { status: 'void' });
     await this.log(await this.compute(), CONTRACT_ID, 'system', 'notice_void', { simulated: false, detail: { reason: '재상신으로 이전 결정의 통보를 취소' } });
   }
@@ -544,6 +561,7 @@ export class IntakeService {
     if (!n.required) throw new Error('NOTICE_NOT_REQUIRED: 이 결정은 통보가 필요 없습니다(갱신 확정 기록만)');
     if (input.kind !== n.kind) throw new Error(`NOTICE_KIND_MISMATCH: 이 결정에 맞는 통보는 ${n.kind}입니다`);
     if (!isIsoDate(input.sentDate)) throw new Error('INVALID_DATE: 발송일이 날짜가 아닙니다');
+    if (input.sentDate < n.createdDate || input.sentDate > (await this.getClock()).today) throw new Error(`INVALID_DATE: 발송일은 결정일(${n.createdDate}) 이후, 오늘 이전이어야 합니다`);
     if (!(await this.repo.updateNotice(caseId, 'open', { status: 'sent', sentDate: input.sentDate, sentBy: actor }))) throw new Error('NOTICE_NOT_OPEN: 방금 다른 요청으로 처리되었습니다');
     await this.log(await this.compute(), caseId, actor, 'notice_sent', { simulated: true, detail: { kind: n.kind, sentDate: input.sentDate, late: input.sentDate > n.dueDate } });
   }
@@ -878,6 +896,7 @@ export class IntakeService {
     await this.repo.claimReview(id, { states: ['pending', 'held', 'escalated'] }, { state: 'returned', holdDue: null, holdRequestId: null });
     await this.closeOpenRequests(id);
     await this.log(c, id, actor, 'primary_return', { detail: { reason: reason.trim() } });
+    if (id === CONTRACT_ID) await this.createNotice('reject');
   }
 
   /** 긴급 구간 안에서 상신·재상신하거나 설정을 켜면 시계를 다시 넘기지 않아도 병행 상신을 보낸다. */

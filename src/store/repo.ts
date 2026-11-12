@@ -212,10 +212,10 @@ export class Repo {
     }));
   }
   /** 열린 상태일 때만 닫는다(동시 처리 방지). */
-  async closeRevision(id: number, status: Exclude<RevisionRow['status'], 'open'>, replyText: string | null, repliedDate: IsoDate): Promise<boolean> {
+  async closeRevision(id: number, status: Exclude<RevisionRow['status'], 'open'>, replyText: string | null, repliedDate: IsoDate, from: RevisionRow['status'] = 'open'): Promise<boolean> {
     const r = await this.db.query(
-      "update revisions set status = $2, reply_text = $3, replied_date = $4 where id = $1 and status = 'open' returning id",
-      [id, status, replyText, repliedDate]);
+      'update revisions set status = $2, reply_text = coalesce($3, reply_text), replied_date = $4 where id = $1 and status = $5 returning id',
+      [id, status, replyText, repliedDate, from]);
     return r.length > 0;
   }
 
@@ -247,6 +247,8 @@ export class Repo {
       [caseId, from, patch.status, patch.sentDate ?? null, patch.sentBy ?? null, patch.receiptProof ?? null, patch.recordedDate ?? null, patch.recordedBy ?? null]);
     return r.length > 0;
   }
+
+  async deleteRevision(id: number): Promise<void> { await this.db.query('delete from revisions where id = $1', [id]); }
 
   async insertAlertIfAbsent(a: AlertInput): Promise<boolean> {
     const r = await this.db.query(
