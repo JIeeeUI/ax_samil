@@ -30,6 +30,11 @@ export interface RevisionRow {
   returnDate: IsoDate; dueDate: IsoDate; status: 'open' | 'adjusted' | 'kept' | 'consult' | 'unanswered';
   replyText: string | null; repliedDate: IsoDate | null;
 }
+export interface NoticeRow {
+  caseId: string; kind: 'terminate' | 'change' | 'renew_confirm'; required: boolean; dueDate: IsoDate; createdDate: IsoDate;
+  status: 'open' | 'sent' | 'done' | 'void'; sentDate: IsoDate | null; sentBy: string | null; receiptProof: boolean | null;
+  recordedDate: IsoDate | null; recordedBy: string | null; simulated: boolean;
+}
 export interface AlertInput { caseId: string; stage: string; kind: string; businessDate: IsoDate; payload?: unknown }
 export interface AlertRow { case_id: string; stage: string; kind: string; business_date: IsoDate; payload: unknown }
 
@@ -52,7 +57,7 @@ export class Repo {
   async migrate(): Promise<void> { await this.db.exec(SCHEMA_SQL); }
 
   async resetAll(): Promise<void> {
-    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1, revisions restart identity');
+    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1, revisions, notices restart identity');
   }
 
   async getClock(): Promise<Clock | null> {
@@ -211,6 +216,35 @@ export class Repo {
     const r = await this.db.query(
       "update revisions set status = $2, reply_text = $3, replied_date = $4 where id = $1 and status = 'open' returning id",
       [id, status, replyText, repliedDate]);
+    return r.length > 0;
+  }
+
+  async getNotice(caseId: string): Promise<NoticeRow | null> {
+    const r = await this.db.query<Record<string, unknown>>('select * from notices where case_id = $1', [caseId]);
+    const x = r[0];
+    if (!x) return null;
+    return {
+      caseId, kind: x.kind as NoticeRow['kind'], required: x.required as boolean, dueDate: x.due_date as string,
+      createdDate: x.created_date as string, status: x.status as NoticeRow['status'], sentDate: (x.sent_date as string) ?? null,
+      sentBy: (x.sent_by as string) ?? null, receiptProof: (x.receipt_proof as boolean) ?? null,
+      recordedDate: (x.recorded_date as string) ?? null, recordedBy: (x.recorded_by as string) ?? null, simulated: x.simulated as boolean,
+    };
+  }
+  /** 결정마다 통보 작업을 새로 만든다(이전 것은 덮어씀). */
+  async putNotice(n: { caseId: string; kind: NoticeRow['kind']; required: boolean; dueDate: IsoDate; createdDate: IsoDate }): Promise<void> {
+    await this.db.query(
+      `insert into notices (case_id, kind, required, due_date, created_date) values ($1, $2, $3, $4, $5)
+       on conflict (case_id) do update set kind = $2, required = $3, due_date = $4, created_date = $5, status = 'open',
+         sent_date = null, sent_by = null, receipt_proof = null, recorded_date = null, recorded_by = null`,
+      [n.caseId, n.kind, n.required, n.dueDate, n.createdDate]);
+  }
+  /** 기대한 상태일 때만 바꾼다. 성공하면 true. */
+  async updateNotice(caseId: string, from: NoticeRow['status'], patch: { status: NoticeRow['status']; sentDate?: IsoDate; sentBy?: string; receiptProof?: boolean; recordedDate?: IsoDate; recordedBy?: string }): Promise<boolean> {
+    const r = await this.db.query(
+      `update notices set status = $3, sent_date = coalesce($4, sent_date), sent_by = coalesce($5, sent_by),
+         receipt_proof = coalesce($6, receipt_proof), recorded_date = coalesce($7, recorded_date), recorded_by = coalesce($8, recorded_by)
+       where case_id = $1 and status = $2 returning case_id`,
+      [caseId, from, patch.status, patch.sentDate ?? null, patch.sentBy ?? null, patch.receiptProof ?? null, patch.recordedDate ?? null, patch.recordedBy ?? null]);
     return r.length > 0;
   }
 

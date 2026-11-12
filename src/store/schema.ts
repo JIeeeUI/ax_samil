@@ -62,6 +62,20 @@ create table if not exists revisions (
   reply_text text,
   replied_date text
 );
+create table if not exists notices (
+  case_id text primary key,
+  kind text not null,
+  required boolean not null,
+  due_date text not null,
+  created_date text not null,
+  status text not null default 'open',
+  sent_date text,
+  sent_by text,
+  receipt_proof boolean,
+  recorded_date text,
+  recorded_by text,
+  simulated boolean not null default true
+);
 create table if not exists alerts (
   case_id text not null,
   stage text not null,

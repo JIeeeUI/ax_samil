@@ -32,6 +32,8 @@ export function commands(svc: IntakeService) {
     confirmFinance: (id: string, role: Actor, opinion?: string) => attempt(() => svc.confirmFinance(id, role, { opinion })),
     financeReturn: (id: string, role: Actor, input: Parameters<IntakeService['financeReturn']>[2]) => attempt(() => svc.financeReturn(id, role, input)),
     replyRevision: (id: string, role: Actor, input: Parameters<IntakeService['replyRevision']>[2]) => attempt(() => svc.replyRevision(id, role, input)),
+    sendNotice: (id: string, role: Actor, input: Parameters<IntakeService['sendNotice']>[2]) => attempt(() => svc.sendNotice(id, role, input)),
+    recordNotice: (id: string, role: Actor, input: Parameters<IntakeService['recordNotice']>[2]) => attempt(() => svc.recordNotice(id, role, input)),
     submit: (id: string, role: Actor) => attempt(() => svc.submit(id, role)),
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),

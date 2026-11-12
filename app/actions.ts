@@ -56,6 +56,14 @@ export async function actRevisionReply(fd: FormData) {
   }));
 }
 
+/** 에이전시 통보: 발송(마케팅) / 기록(계약 담당) */
+export async function actSendNotice(fd: FormData) {
+  return done(fd, await (await cmd()).sendNotice(field(fd, 'id'), await currentRole(), { kind: field(fd, 'kind') as 'terminate' | 'change', sentDate: field(fd, 'sentDate') }));
+}
+export async function actRecordNotice(fd: FormData) {
+  return done(fd, await (await cmd()).recordNotice(field(fd, 'id'), await currentRole(), { receiptProof: field(fd, 'receiptProof') === 'yes' }));
+}
+
 /** 반려 사유 목록 켜기·끄기(설정) */
 export async function actSetReturnReasons(fd: FormData) {
   const returnReasons = Object.fromEntries(RETURN_REASONS.map((k) => [k, fd.get(`rr_${k}`) === 'on']));

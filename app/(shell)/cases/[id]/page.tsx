@@ -6,7 +6,7 @@ import { canChangeContract, defaultOwnerFor } from '../../../../src/workflow/own
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
 import { RETURN_REASONS, RETURN_REASON_LABEL } from '../../../../src/workflow/schedule.js';
 import {
-  actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actResubmit, actRevisionReply, actSubmit,
+  actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actRecordNotice, actResubmit, actRevisionReply, actSendNotice, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
@@ -84,6 +84,25 @@ export default async function CasePage({
           </form>
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
+      {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
+      {d.notice && d.notice.status !== 'void' && (
+        <section className="card-block">
+          <h2>에이전시 통보 <small>(발송은 마케팅, 기록은 계약 담당 · 교육용 가정)</small></h2>
+          <p>{{ terminate: '해지 통보', change: '조건 변경 통보', renew_confirm: '갱신 확정 기록' }[d.notice.kind]}{d.notice.required ? ' (필수)' : ' (통보 불요: 기록만)'} · 통보 기한 {koDate(d.notice.dueDate)} · <Badge tone={d.notice.status === 'done' ? 'green' : 'amber'}>{{ open: '미완료', sent: '발송됨(기록 대기)', done: '완료', void: '취소' }[d.notice.status]}</Badge></p>
+          {d.notice.sentDate && <p className="meta">발송일 {koDate(d.notice.sentDate)}{d.notice.sentDate > d.notice.dueDate ? ' (통보 기한 이후)' : ''} · 모의 입력</p>}
+          {d.notice.status === 'done' && <p className="meta">{koDate(d.notice.recordedDate ?? '')} 기록 · 수령 증빙 {d.notice.receiptProof ? '있음' : '없음'} · 모의 입력</p>}
+          {d.notice.required && d.notice.status === 'open' && role === 'marketing' && (
+            <form action={actSendNotice} className="hold">{hidden}<input type="hidden" name="kind" value={d.notice.kind} />
+              <label>발송일 <input type="date" name="sentDate" required /></label>
+              <button type="submit">통보 발송했어요(모의)</button></form>
+          )}
+          {(d.notice.status === 'sent' || (!d.notice.required && d.notice.status === 'open')) && role === 'contract' && (
+            <form action={actRecordNotice} className="hold">{hidden}
+              <label>수령 증빙 <select name="receiptProof" defaultValue="no"><option value="yes">있음</option><option value="no">없음</option></select></label>
+              <button type="submit">기록 완료(모의)</button></form>
+          )}
+        </section>
+      )}
       {d.adjustments.length > 0 && (
         <div className="flash flash-warn"><strong>마케팅이 조정한 내용</strong>
           <ul className="reqs">{d.adjustments.map((a, n) => (
