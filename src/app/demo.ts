@@ -1,7 +1,7 @@
 import type { IsoDate } from '../engine/types.js';
 import { CONTRACT_ID, type IntakeService, type ReplyValues } from './service.js';
 
-export type ScenarioName = 'normal' | 'change' | 'shortage';
+export type ScenarioName = 'normal' | 'change' | 'shortage' | 'twoStage';
 export interface ScenarioReport { scenario: ScenarioName; lines: string[]; facts: Record<string, unknown> }
 
 const IN_BREACH: IsoDate = '2026-08-10'; // 하회 구간(7/21~8/21) 안
@@ -128,6 +128,31 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
     await svc.decide('PLAN-001', 'ceo_board', 'reject');
     facts.linkWarning = (await svc.getCase(CONTRACT_ID)).linkWarnings[0]?.message ?? null;
     say(`혜인 기안 PLAN-001만 부결: ${facts.linkWarning}`);
+  }
+
+  if (name === 'twoStage') {
+    // 1차(대표 검토) → 2차(CEO/이사회) 결재를 켠 시연 3: 1차 보류는 시계를 멈추지 않고, 긴급(결정 기한 10일 전)이면 CEO에게 병행 상신한다.
+    await svc.reset();
+    await svc.setConfig({ twoStage: true, alertPlan: 'extended' });
+    await submitContract();
+    const msg = async (fn: () => Promise<unknown>) => { try { await fn(); return 'ok'; } catch (e) { return (e as Error).message.split(':')[0]; } };
+    facts.masilCannotApprove = await msg(() => svc.decide(CONTRACT_ID, 'masil_ceo', 'approve'));
+    facts.ceoBeforeFirstStage = await msg(() => svc.decide(CONTRACT_ID, 'ceo_board', 'approve'));
+    say(`대표 단독 승인 → ${facts.masilCannotApprove}, 1차 전 CEO 결정 → ${facts.ceoBeforeFirstStage}`);
+    facts.holdBeyondCap = await msg(() => svc.primaryHold(CONTRACT_ID, 'masil_ceo', { needed: 'payment_schedule', ownerRole: 'finance', dueDate: '2026-07-15' }));
+    await svc.primaryHold(CONTRACT_ID, 'masil_ceo', { needed: 'payment_schedule', ownerRole: 'finance', dueDate: '2026-07-14' });
+    say('1차 보류(담당 재무, 기한 7/14 = 결정 기한 7/17 − 3일). 업무 시계는 멈추지 않는다');
+    const early = await svc.advanceClock('2026-07-06');
+    facts.parallelBeforeUrgent = early.raised.some((r) => r.caseId === CONTRACT_ID && r.kind === 'parallel');
+    const urgent = await svc.advanceClock('2026-07-07');
+    facts.parallelAtUrgent = urgent.raised.some((r) => r.caseId === CONTRACT_ID && r.kind === 'parallel');
+    const mid = await svc.getCase(CONTRACT_ID);
+    facts.reviewAtUrgent = { state: mid.review?.state, parallel: mid.review?.parallel };
+    say(`2026-07-07(결정 기한 10일 전): 1차 미결 + CEO 병행 상신 = ${JSON.stringify(facts.reviewAtUrgent)}`);
+    await svc.decide(CONTRACT_ID, 'ceo_board', 'approve');
+    const end = await svc.getCase(CONTRACT_ID);
+    facts.afterCeoDecision = { status: end.item.status, review: end.review?.state };
+    say(`CEO가 먼저 결정 → ${JSON.stringify(facts.afterCeoDecision)}(1차는 병행 결정으로 닫힘)`);
   }
 
   return { scenario: name, lines, facts };

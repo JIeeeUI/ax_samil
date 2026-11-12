@@ -1,6 +1,8 @@
 import { SCENARIOS, THRESHOLDS } from '../../../src/engine/assumptions.js';
 import { getService } from '../../../src/app/instance.js';
-import { actAdvanceClock, actReset, actSetScenario } from '../../actions.js';
+import { actAdvanceClock, actReset, actSetConfig, actSetScenario } from '../../actions.js';
+import { ALERT_PLANS, MESSAGE_TEXT } from '../../../src/workflow/alertPlan.js';
+import { ROLE_LABEL } from '../../../src/workflow/roles.js';
 import { Badge, Flash, LABEL_KO, SCENARIO_LABEL, won } from '../../components.js';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +27,10 @@ const THRESHOLD_KO: Record<string, string> = {
 export default async function Settings({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const svc = await getService();
-  const [scenario, clock] = [await svc.getScenario(), await svc.getClock()];
+  const [scenario, clock, cfg] = [await svc.getScenario(), await svc.getClock(), await svc.getConfig()];
+  const plan = ALERT_PLANS[cfg.alertPlan];
+  const planState = await svc.alertPlanStatus('CONTRACT-INF-001');
+  const STATE_KO: Record<string, string> = { sent: '발송됨(모의)', passed: '알림 시점 지남', scheduled: '예정', due: '대기', not_applicable: '해당 없음' };
   const a = SCENARIOS[scenario];
   const hidden = <input type="hidden" name="back" value="/settings" />;
   return (
@@ -48,6 +53,30 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <h2>처음부터 다시 하기</h2>
         <p>모든 건을 처음 상태로 되돌리고 오늘 날짜를 {clock.asOf}로 돌립니다. 지금까지 눌러 본 기록은 사라져요.</p>
         <form action={actReset}>{hidden}<button type="submit" className="secondary">전체 초기화</button></form>
+      </section>
+
+      <section className="card-block">
+        <h2>결재·알림 설정 <Badge tone="amber">가정</Badge></h2>
+        <p>교육용으로 정한 값이에요. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>이에요.</p>
+        <form action={actSetConfig} className="hold">{hidden}
+          <label>1차/2차 결재 <select name="twoStage" defaultValue={cfg.twoStage ? 'on' : 'off'}><option value="off">끄기(기본, 1단계)</option><option value="on">켜기(대표 검토 → CEO 결정)</option></select></label>
+          <label>긴급 기준(결정 기한 며칠 전부터) <input type="number" name="urgentDays" min={1} max={60} defaultValue={cfg.urgentDays} /></label>
+          <label>1차 보류 상한(결정 기한 며칠 전까지) <input type="number" name="holdCapDays" min={0} max={30} defaultValue={cfg.holdCapDays} /></label>
+          <label>알림 계획표 <select name="alertPlan" defaultValue={cfg.alertPlan}>{Object.values(ALERT_PLANS).map((p) => <option key={p.id} value={p.id}>{p.id} — {p.label}</option>)}</select></label>
+          <button type="submit">설정 저장</button>
+        </form>
+        <h3>활성 알림 계획표: {plan.id} <small>버전 {plan.version} · {plan.retroactive ? '지난 단계도 만듦' : '지난 단계는 만들지 않고 “알림 시점 지남”으로만 표시'}</small></h3>
+        <table><thead><tr><th>단계</th><th>받는 사람</th><th>메시지</th><th>혜인 전속계약(결정 기한 7/17)</th></tr></thead><tbody>
+          {plan.rows.map((row, n) => (
+            <tr key={n}>
+              <td>D-{row.daysBefore}{row.kind === 'escalation' ? ' 상급자 경고' : ''}</td>
+              <td>{[...row.audienceRoles, ...(row.decisionRoles ?? [])].map((r) => ROLE_LABEL[r]).join(', ')}</td>
+              <td><small>{MESSAGE_TEXT[row.messageKey]}{row.decisionRoles ? ` (${row.decisionRoles.map((r) => ROLE_LABEL[r]).join('·')}에게는 준비되면 결정 요청, 아니면 미준비 경고만)` : ''}</small></td>
+              <td>{STATE_KO[planState[n]?.state ?? 'scheduled']} <small>({planState[n]?.triggerDate})</small></td>
+            </tr>
+          ))}
+        </tbody></table>
+        {plan.holdOverdueWarning && <p className="meta">1차 보류가 자기 기한을 넘기면 즉시 대표·CEO에게 경고합니다.</p>}
       </section>
 
       <h2>가정을 바꿔 보기</h2>

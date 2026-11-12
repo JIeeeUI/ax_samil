@@ -6,7 +6,7 @@ export type Status =
   | 'finance_review' | 'routed' | 'submitted' | 'approved' | 'rejected' | 'on_hold' | 'overdue' | 'closed';
 
 export type Action =
-  | 'confirm_finance' | 'submit' | 'approve' | 'reject' | 'hold' | 'reply' | 'resubmit' | 'close' | 'expire';
+  | 'confirm_finance' | 'submit' | 'approve' | 'reject' | 'hold' | 'reply' | 'resubmit' | 'close' | 'expire' | 'primary_return';
 
 /** 더 이상 결정할 수 없는 상태 */
 export const TERMINAL: ReadonlySet<Status> = new Set<Status>(['approved', 'overdue', 'closed']);
@@ -26,6 +26,8 @@ const TABLE: Record<Status, Partial<Record<Action, { to: Status; by: Allowed }>>
     approve: { to: 'approved', by: 'decision' },
     reject: { to: 'rejected', by: 'decision' },
     hold: { to: 'on_hold', by: 'decision' },
+    // 1차 대표 검토의 반려(설정으로 1차/2차를 켠 CEO/이사회 경로만 서비스가 허용). 거절과 같다.
+    primary_return: { to: 'rejected', by: ['masil_ceo'] },
     expire: { to: 'overdue', by: ['system'] },
   },
   on_hold: { reply: { to: 'routed', by: ANY_ROLE }, expire: { to: 'overdue', by: ['system'] } },

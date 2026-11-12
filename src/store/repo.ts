@@ -21,6 +21,10 @@ export interface InfoRequestRow {
   draftText: string | null; replyText: string | null; replyValues: Record<string, unknown> | null;
   simulated: boolean; createdDate: IsoDate; repliedDate: IsoDate | null;
 }
+export interface ReviewRow {
+  caseId: string; state: 'pending' | 'held' | 'escalated' | 'returned' | 'closed_parallel'; parallel: boolean;
+  parallelDate: IsoDate | null; holdDue: IsoDate | null; holdRequestId: number | null;
+}
 export interface AlertInput { caseId: string; stage: string; kind: string; businessDate: IsoDate; payload?: unknown }
 export interface AlertRow { case_id: string; stage: string; kind: string; business_date: IsoDate; payload: unknown }
 
@@ -43,7 +47,7 @@ export class Repo {
   async migrate(): Promise<void> { await this.db.exec(SCHEMA_SQL); }
 
   async resetAll(): Promise<void> {
-    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts restart identity');
+    await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1 restart identity');
   }
 
   async getClock(): Promise<Clock | null> {
@@ -128,6 +132,22 @@ export class Repo {
          reply_values = coalesce($4::jsonb, reply_values), draft_text = coalesce($5, draft_text),
          replied_date = coalesce($6, replied_date), simulated = coalesce($7, simulated) where id = $1`,
       [id, p.status ?? null, p.replyText ?? null, json(p.replyValues), p.draftText ?? null, p.repliedDate ?? null, p.simulated ?? null]);
+  }
+
+  async getReview(caseId: string): Promise<ReviewRow | null> {
+    const r = await this.db.query<Record<string, unknown>>('select * from review1 where case_id = $1', [caseId]);
+    if (!r[0]) return null;
+    const x = r[0];
+    return {
+      caseId, state: x.state as ReviewRow['state'], parallel: x.parallel as boolean, parallelDate: (x.parallel_date as string) ?? null,
+      holdDue: (x.hold_due as string) ?? null, holdRequestId: (x.hold_request_id as number) ?? null,
+    };
+  }
+  async saveReview(r: ReviewRow): Promise<void> {
+    await this.db.query(
+      `insert into review1 (case_id, state, parallel, parallel_date, hold_due, hold_request_id) values ($1, $2, $3, $4, $5, $6)
+       on conflict (case_id) do update set state = $2, parallel = $3, parallel_date = $4, hold_due = $5, hold_request_id = $6`,
+      [r.caseId, r.state, r.parallel, r.parallelDate, r.holdDue, r.holdRequestId]);
   }
 
   async insertAlertIfAbsent(a: AlertInput): Promise<boolean> {

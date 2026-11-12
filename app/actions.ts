@@ -6,7 +6,8 @@ import { redirect } from 'next/navigation';
 import { commands, decisionFromForm, type Result } from '../src/app/commands.js';
 import { getService } from '../src/app/instance.js';
 import { SCENARIOS, type ScenarioId } from '../src/engine/assumptions.js';
-import { isRole } from '../src/workflow/roles.js';
+import type { Config } from '../src/app/service.js';
+import { isRole, type Role } from '../src/workflow/roles.js';
 import { currentRole } from './session.js';
 
 const field = (fd: FormData, k: string): string => {
@@ -57,6 +58,30 @@ export async function actReply(fd: FormData) {
 export async function actProposeChange(fd: FormData) {
   const date = field(fd, 'cashOutflowDate');
   return done(fd, await (await cmd()).proposeChange(num(field(fd, 'fee')) ?? NaN, date === '' ? undefined : date));
+}
+
+/** 1차 대표 검토: 상신 / 보류 / 반려 */
+export async function actPrimary(fd: FormData) {
+  const id = field(fd, 'id');
+  const role = await currentRole();
+  const c = await cmd();
+  const op = field(fd, 'op');
+  if (op === 'escalate') return done(fd, await c.primaryEscalate(id, role));
+  if (op === 'return') return done(fd, await c.primaryReturn(id, role));
+  if (op === 'hold') {
+    return done(fd, await c.primaryHold(id, role, { needed: field(fd, 'holdNeeded'), ownerRole: field(fd, 'holdOwner') as Role, dueDate: field(fd, 'holdDue') }));
+  }
+  return done(fd, { ok: false, error: `INVALID_OP: ${op}` });
+}
+
+/** 결재·알림 설정([가정]): 1차/2차 켜기, 긴급 기준, 1차 보류 상한, 알림 계획표 */
+export async function actSetConfig(fd: FormData) {
+  const patch: Partial<Config> = {};
+  if (field(fd, 'twoStage') !== '') patch.twoStage = field(fd, 'twoStage') === 'on';
+  if (field(fd, 'urgentDays') !== '') patch.urgentDays = Number(field(fd, 'urgentDays'));
+  if (field(fd, 'holdCapDays') !== '') patch.holdCapDays = Number(field(fd, 'holdCapDays'));
+  if (field(fd, 'alertPlan') !== '') patch.alertPlan = field(fd, 'alertPlan') as Config['alertPlan'];
+  return done(fd, await (await cmd()).setConfig(patch));
 }
 
 export async function actAdvanceClock(fd: FormData) { return done(fd, await (await cmd()).advanceClock(field(fd, 'date'))); }

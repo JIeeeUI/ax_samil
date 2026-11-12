@@ -1,7 +1,8 @@
 import type { ScenarioId } from '../engine/assumptions.js';
 import type { IsoDate } from '../engine/types.js';
 import type { Role } from '../workflow/roles.js';
-import type { Actor, Decision, IntakeService, ReplyValues } from './service.js';
+import type { HoldInput } from '../workflow/status.js';
+import type { Actor, Config, Decision, IntakeService, ReplyValues } from './service.js';
 
 export type Result = { ok: true } | { ok: false; error: string };
 
@@ -35,6 +36,10 @@ export function commands(svc: IntakeService) {
       attempt(() => svc.replyInfoRequest(requestId, { text, values, simulated, resolved })),
     proposeChange: (fee: number, cashOutflowDate?: IsoDate | null) =>
       attempt(() => svc.proposeContractChange({ annualFixedFeeKrw: fee, cashOutflowDate })),
+    primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
+    primaryHold: (id: string, role: Actor, hold: HoldInput) => attempt(() => svc.primaryHold(id, role, hold)),
+    primaryReturn: (id: string, role: Actor) => attempt(() => svc.primaryReturn(id, role)),
+    setConfig: (patch: Partial<Config>) => attempt(() => svc.setConfig(patch)),
     advanceClock: (to: IsoDate) => attempt(() => svc.advanceClock(to)),
     setScenario: (id: ScenarioId) => attempt(() => svc.setScenario(id)),
     reset: () => attempt(() => svc.reset()),

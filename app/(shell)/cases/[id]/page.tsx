@@ -4,7 +4,7 @@ import { createProvider } from '../../../../src/ai/provider.js';
 import { getService } from '../../../../src/app/instance.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
 import {
-  actClose, actConfirmFinance, actDecide, actProposeChange, actResubmit, actSubmit,
+  actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { FLOW_STEPS, STATUS_PLAIN, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
@@ -24,6 +24,8 @@ export default async function CasePage({
   const back = `/cases/${id}`;
   const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null);
   const decider = decisionRole(i.routeLevel);
+  // 1차/2차를 켠 경우 CEO/이사회는 1차 상신 또는 긴급 병행 상신 뒤에만 결정한다.
+  const canSecond = !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
   const step = nextStep(i, role);
   const at = flowIndex(i.status);
   const hidden = <><input type="hidden" name="id" value={id} /><input type="hidden" name="back" value={back} /></>;
@@ -42,7 +44,7 @@ export default async function CasePage({
         <div className="cta">
           {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<button type="submit">재무 확인 완료</button></form>}
           {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
-          {i.status === 'submitted' && role === decider && (
+          {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><button type="submit" className="danger">거절</button></form>
@@ -53,7 +55,7 @@ export default async function CasePage({
           )}
         </div>
       )}
-      {i.status === 'submitted' && role === decider && (
+      {i.status === 'submitted' && role === decider && canSecond && (
         <details className="fold"><summary>정보가 더 필요하면 보류하기</summary>
           <form action={actDecide} className="hold">{hidden}<input type="hidden" name="decision" value="hold" />
             <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
@@ -65,6 +67,40 @@ export default async function CasePage({
       )}
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
       {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
+
+      {d.review && (
+        <section className="card-block">
+          <h2>결재 단계 <small>(1차 대표 검토 → 2차 CEO/이사회 결정 · 교육용 가정)</small></h2>
+          <ol className="plain">
+            <li><strong>1차 대표 검토</strong>: {{
+              pending: '검토 대기', held: `보류 중(담당 답변 기한 ${d.review.holdDue})`, escalated: '상신 완료 → 2차로 올렸어요',
+              returned: '반려(거절과 같아요, 다시 올릴 수 있어요)', closed_parallel: '병행 결정으로 닫힘(CEO가 먼저 결정했어요)',
+            }[d.review.state]}{d.review.parallel && d.review.state !== 'closed_parallel' && <> <Badge tone="red">1차 미결</Badge></>}</li>
+            <li><strong>2차 CEO/이사회 결정</strong>: {i.status === 'approved' ? '승인' : i.status === 'rejected' ? '거절' : d.review.parallel
+              ? `긴급이라 병행 상신했어요(${d.review.parallelDate}, 결정 기한 ${d.review.urgentDays}일 이내)` : d.review.state === 'escalated' ? '결정 요청됨' : '1차 상신 후 결정해요'}</li>
+          </ol>
+          <p className="meta">1차에서 보류해도 시계는 멈추지 않아요. 보류 기한은 {koDate(d.review.holdCapDate)}까지만 가능하고, 결정 기한 {d.review.urgentDays}일 전부터는 1차가 끝나지 않아도 CEO/이사회에 함께 올려요.</p>
+          {i.status === 'submitted' && role === 'masil_ceo' && (d.review.state === 'pending' || d.review.state === 'held') && (
+            <>
+              <div className="two">
+                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="escalate" /><button type="submit">검토 마치고 CEO/이사회에 올리기</button></form>
+                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="return" /><button type="submit" className="danger">반려</button></form>
+              </div>
+              {d.review.state === 'pending' && (d.review.canHold ? (
+                <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>
+                  <form action={actPrimary} className="hold">{hidden}<input type="hidden" name="op" value="hold" />
+                    <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
+                    <label>누가 확인하나요? <select name="holdOwner" defaultValue="finance">{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
+                    <label>언제까지 답을 받나요? (최대 {d.review.holdCapDate}) <input type="date" name="holdDue" max={d.review.holdCapDate} required /></label>
+                    <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
+                  </form>
+                </details>
+              ) : <p className="meta">보류 상한일({d.review.holdCapDate})이 지나 1차 보류는 만들 수 없어요. 바로 CEO/이사회에 올리세요.</p>)}
+            </>
+          )}
+          {i.status === 'submitted' && role === decider && !canSecond && <p>아직 1차 대표 검토 중이라 결정할 수 없어요. 긴급해지면 자동으로 함께 올라옵니다.</p>}
+        </section>
+      )}
 
       <section className="summary">
         <ul className="facts">

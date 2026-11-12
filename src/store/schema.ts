@@ -41,6 +41,14 @@ create table if not exists info_requests (
   created_date text not null,
   replied_date text
 );
+create table if not exists review1 (
+  case_id text primary key,
+  state text not null,
+  parallel boolean not null default false,
+  parallel_date text,
+  hold_due text,
+  hold_request_id integer
+);
 create table if not exists alerts (
   case_id text not null,
   stage text not null,
