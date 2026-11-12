@@ -185,3 +185,9 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
   details.fold > summary:hover { color: var(--primary); }
 }
 @media (min-width: 960px) { main > details.fold:has(.cardgrid) { max-width: none; } }
+
+/* 확인할 점처럼 여러 줄 목록은 값 영역을 왼쪽 정렬로 읽기 쉽게 */
+.facts li:has(ul.plain) { flex-direction: column; gap: 4px; }
+.facts li:has(ul.plain) .v { text-align: left; font-weight: 500; }
+ul.plain { text-align: left; }
+.facts ul.plain li { padding: 2px 0 2px 1.4em; text-indent: -1.4em; margin: 2px 0; }
