@@ -18,7 +18,7 @@ test('baseline assumptions', () => {
 test('every assumption field has a label', () => {
   for (const s of Object.values(SCENARIOS)) {
     expect(Object.keys(s.labels).sort()).toEqual(
-      ['calcMode', 'channelFeeBasis', 'lc0001TermsDays', 'overdueAp', 'overdueAr', 'recoverCostOnRefund', 'unitsPerOrder']);
+      ['calcMode', 'channelFeeBasis', 'lc0001TermsDays', 'overdueAp', 'overdueAr', 'recoverCostOnRefund', 'returnAttribution', 'unitsPerOrder']);
   }
   expect(SCENARIOS.baseline.labels.lc0001TermsDays).toBe('confirmed');
   expect(SCENARIOS.lc45.labels.lc0001TermsDays).toBe('assumption');
