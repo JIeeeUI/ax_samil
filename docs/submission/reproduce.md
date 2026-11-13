@@ -27,6 +27,7 @@ npm run intake -- --scenario lc45 --out outputs/intake_lc45.csv
 ## 4. 시연 3건 — 스크립트
 ```bash
 npm run demo -- all        # 또는 normal | change | shortage
+npm run demo -- check      # 상신 전 점검 시연(정상·변경·정보 부족). 라벨: 확인 대기 → 재무 확인 대기 → 상신 준비 완료 → 상신함
 ```
 시나리오마다 처음부터 초기화하고, 단계별 로그와 확인 값을 출력합니다.
 

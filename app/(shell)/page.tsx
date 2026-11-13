@@ -18,7 +18,7 @@ function CaseRow({ i, mine, hint }: { i: TodayItem; mine: boolean; hint?: string
         <span className="meta2">{koDate(i.effectiveDeadline)}까지 · {daysLeftText(i.daysLeft)}</span>
         <div className="chips">
           <Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
-          {i.checkLabel && <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge>}
+          {i.checkLabel && <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : i.checkLabel === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge>}
           {serious > 0 && <Badge tone="red">주의 {serious}</Badge>}
         </div>
         {hint && <span className="meta2">{hint}</span>}
