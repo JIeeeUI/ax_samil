@@ -243,7 +243,7 @@ export default async function CasePage({
           <tbody>{d.events.map((e) => (
             <tr key={e.id}>
               <td>{e.business_date}</td>
-              <td>{e.actor_role === 'system' ? '시스템' : ROLE_LABEL[e.actor_role as keyof typeof ROLE_LABEL] ?? e.actor_role}{e.simulated && <Badge tone="blue">시연</Badge>}</td>
+              <td>{e.actor_role === 'system' ? '자동 처리' : ROLE_LABEL[e.actor_role as keyof typeof ROLE_LABEL] ?? e.actor_role}{e.simulated && <Badge tone="blue">시연</Badge>}</td>
               <td>{ACTION_LABEL[e.action] ?? e.action}</td>
             </tr>
           ))}</tbody></table>

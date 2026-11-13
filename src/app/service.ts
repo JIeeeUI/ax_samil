@@ -3,6 +3,7 @@ import { addDays, daysBetween, isIsoDate } from '../engine/calendar.js';
 import { buildCases, INF001_CONTRACT, planTotal, type Case } from '../engine/cases.js';
 import { simulateCash, type BreachWindow, type CashResult } from '../engine/cash.js';
 import { cashComparison, type CashComparison } from '../engine/cashGap.js';
+import { historyEntry, type HistoryEntry } from './history.js';
 import { terminationPenalty } from '../engine/contract.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
@@ -80,6 +81,8 @@ export interface CaseDetail {
   rejection: Rejection | null;
   cashComparison: CashComparison;
   check: CheckResult;
+  /** 처리 기록(화면용): 실제 시각, 보낸 사람, 받는 부서(담당자) */
+  history: HistoryEntry[];
   revisions: RevisionRow[]; adjustments: AdjustmentRecord[];
   /** 자동 갱신 계약의 에이전시 통보 작업(결정이 난 뒤에만 있다) */
   notice: NoticeRow | null;
@@ -378,6 +381,7 @@ export class IntakeService {
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
       cashComparison: cashComparison(this.room.full, c.a),
+      history: events.map(historyEntry),
       check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,

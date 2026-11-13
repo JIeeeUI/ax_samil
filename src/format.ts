@@ -12,3 +12,12 @@ export function formatMan(n: number): string {
 
 /** 예측·추정 금액용: "약 546,888만 원" */
 export const approxMan = (n: number): string => `약 ${formatMan(n)}`;
+
+/** 실제 기록 시각(ISO)을 한국 시간 "시:분"으로. 업무일(시연 날짜)과는 별개다. 읽을 수 없으면 "—". */
+export function formatClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
+  return `${get('hour')}:${get('minute')}`;
+}
