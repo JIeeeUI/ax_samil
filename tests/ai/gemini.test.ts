@@ -77,7 +77,8 @@ test('5) verification failure: an invented number is not used (error "verify_fai
   const d = await detail();
   const { f } = mockFetch(() => new Response(geminiBody('고정 피는 99억 원이며 승인을 권고합니다.'), { status: 200 }));
   const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
-  expect(r).toMatchObject({ source: 'fallback', error: 'verify_failed', note: 'AI 문장 숫자 불일치: 미반영' });
+  expect(r).toMatchObject({ source: 'fallback', error: 'verify_failed', note: expect.stringContaining('AI 문장 숫자 불일치: 미반영') });
+  expect(r.note).toContain('걸린 값: 99억'); // 어떤 값이 걸렸는지 화면에 보인다
 });
 
 test('an empty Gemini response is an http_error, not a blank sentence', async () => {
