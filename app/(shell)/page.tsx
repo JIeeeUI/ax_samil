@@ -62,7 +62,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <Flash error={error} />
         <h1>{title}<small>상신 전 점검 · {ROLE_LABEL[role]}</small></h1>
         {v.breaches.length > 0 && (
-          <div className="flash flash-warn">
+          <div className="flash flash-info">
             <strong>{v.breaches.map((b) => koDate(b.start) + ' ~ ' + koDate(b.end)).join(', ')}</strong>에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정합니다.
           </div>
         )}
@@ -94,7 +94,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <h1>{mine.length > 0 ? `처리할 건 ${mine.length}건` : '처리할 건이 없습니다'}<small>{ROLE_LABEL[role]}</small></h1>
 
       {v.breaches.length > 0 && (
-        <div className="flash flash-warn">
+        <div className="flash flash-info">
           <strong>{v.breaches.map((b) => `${koDate(b.start)} ~ ${koDate(b.end)}`).join(', ')}</strong>에는 회사 현금이 부족해질 수 있습니다.
           이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정합니다.
         </div>

@@ -51,8 +51,10 @@ export function CashNote({ lines, unverified }: { lines: string[]; unverified: s
       {(why.length > 0 || unverified.length > 0) && (
         <details className="more">
           <summary>차이 사유</summary>
-          {why.map((w) => <p key={w}>{w}</p>)}
-          {unverified.length > 0 && <p className="meta">{formal(unverified.join(' · '))}</p>}
+          <ul className="reasons">
+            {why.map((w) => <li key={w}>{w}</li>)}
+            {unverified.map((u) => <li key={u}>{formal(u)}</li>)}
+          </ul>
         </details>
       )}
     </div>

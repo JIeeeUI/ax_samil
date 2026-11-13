@@ -361,3 +361,19 @@ ul.linklist, ul.lines { list-style: none; margin: 0; padding: 0; }
 ul.linklist li, ul.lines li { padding: 8px 0; border-bottom: 1px solid var(--line); line-height: 1.6; }
 ul.linklist li:last-child, ul.lines li:last-child { border-bottom: 0; }
 ul.linklist li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+
+/* ---- 알림 상자 톤앤톤: 종류마다 같은 계열의 명암 + 왼쪽 띠 ---- */
+.flash { border-left: 5px solid transparent; }
+.flash-info { background: var(--mint-soft); color: var(--forest-text); border-left-color: var(--forest); }
+.flash-warn { border-left-color: var(--amber); }
+.flash-error { border-left-color: var(--red); }
+.flash-ok { border-left-color: var(--mint); }
+
+/* 재무 확인 필요 상자: 안쪽에 한 단계 밝은 칸으로 항목을 줄마다 구분 */
+.cashnote ul.reasons { list-style: none; margin: 10px 0 0; padding: 4px 14px; background: rgba(255, 255, 255, 0.55); border-radius: 12px; }
+.cashnote ul.reasons li { padding: 9px 0; border-bottom: 1px solid rgba(138, 87, 18, 0.22); line-height: 1.55; }
+.cashnote ul.reasons li:last-child { border-bottom: 0; }
+@media (prefers-color-scheme: dark) {
+  .cashnote ul.reasons { background: rgba(255, 255, 255, 0.07); }
+  .cashnote ul.reasons li { border-bottom-color: rgba(240, 189, 114, 0.25); }
+}
