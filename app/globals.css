@@ -1,15 +1,22 @@
 :root {
   color-scheme: light dark;
-  --bg: #f2f4f6; --card: #ffffff; --fg: #191f28; --muted: #5b6573; --line: #e5e8eb;
-  --primary: #1b64da; --primary-fg: #ffffff; --primary-bg: #e8f3ff;
-  --red: #c2202e; --red-bg: #ffeceb; --amber: #8f4c05; --amber-bg: #fff3e0; --green: #02713f; --green-bg: #e6f7ef;
+  /* Mint / System 팔레트: Forest(진한 초록) · Mint(연한 초록) · Ivory(바탕) · Ink(글자) */
+  --forest: #1c5b46; --mint: #9ccab9; --mint-soft: #e4f1ea; --ivory: #f3f2ec; --ink: #1b2428;
+  --bg: var(--ivory); --card: #fbfaf6; --fg: var(--ink); --muted: #55625e; --line: #e2e1d8;
+  --primary: var(--forest); --primary-fg: #ffffff; --primary-bg: var(--mint-soft); --forest-text: #1c5b46;
+  --red: #b3372d; --red-bg: #f8e8e4; --amber: #8a5712; --amber-bg: #f6ecd8; --green: #1c5b46; --green-bg: #dff0e8;
+  --blue: #2b5b86; --blue-bg: #e3edf5;
+  --shadow: 0 1px 2px rgba(28, 60, 48, 0.05), 0 8px 22px rgba(28, 60, 48, 0.07);
   font-family: 'Pretendard', system-ui, -apple-system, 'Malgun Gothic', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101114; --card: #1b1d22; --fg: #f2f4f6; --muted: #9ea4ae; --line: #2c2f36;
-    --primary: #4593fc; --primary-fg: #0b0c0f; --primary-bg: #1b2a40;
-    --red: #ff7b86; --red-bg: #3a1d21; --amber: #ffb866; --amber-bg: #3a2c16; --green: #4fd69b; --green-bg: #15322a;
+    --forest: #8fcfb6; --mint: #3f7d68; --mint-soft: #1d2e28; --ivory: #111715; --ink: #edf2ef;
+    --bg: var(--ivory); --card: #1a2220; --fg: var(--ink); --muted: #a3b2ac; --line: #2a3531;
+    --primary: #8fcfb6; --primary-fg: #0e1a15; --primary-bg: #1d2e28; --forest-text: #a9dcc8;
+    --red: #ff9a8f; --red-bg: #3a1f1c; --amber: #f0bd72; --amber-bg: #392d17; --green: #8fcfb6; --green-bg: #17302a;
+    --blue: #93bde6; --blue-bg: #1c2c3d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.25);
   }
 }
 * { box-sizing: border-box; }
@@ -235,3 +242,33 @@ details.fold .grid dd { font-weight: 600; }
 ol.plain .l1 { font-weight: 600; }
 /* 카드가 좁아 배지가 금액과 겹치지 않도록: 2열은 아주 넓은 화면(1400px 이상)에서만 */
 @media (min-width: 960px) and (max-width: 1399px) { .cardgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Mint / System 적용 ---- */
+/* 카드: 아이보리 바탕 위에 살짝 떠 있는 느낌 */
+.card, .card-block, section.summary, section.todo, .row-card, details.fold, ul.legend, .scn, .tile { box-shadow: var(--shadow); }
+details.fold details.fold, details.fold .row-card, details.fold .grid > div { box-shadow: none; }
+
+/* 버튼: 알약 모양. 기본 = Forest, 보조 = Mint */
+button, .btn { border-radius: 999px; }
+button.secondary { background: var(--mint-soft); color: var(--forest-text); border: 1.5px solid var(--mint); }
+button.danger { background: var(--red-bg); color: var(--red); }
+.roleswitch select { border-radius: 999px; }
+
+/* 이름·강조 */
+.brand strong, .tabbar::before { color: var(--forest-text); }
+.tabbar a.on { background: var(--mint-soft); color: var(--forest-text); }
+a { color: var(--forest-text); }
+
+/* 진행 단계·구역 막대·정보 상자 */
+.steps li { border-top-color: var(--mint-soft); }
+.steps li.done { border-top-color: var(--mint); }
+.steps li.now { border-top-color: var(--forest); color: var(--forest-text); }
+details.fold .grid h3 { border-left-color: var(--forest); }
+.flash-ok { background: var(--mint-soft); }
+details.fold { border: 1px solid var(--line); }
+details.fold .grid > div { background: var(--bg); }
+
+/* 배지: 초록=Forest/Mint, 파랑은 구분을 위해 따로 */
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-blue { background: var(--blue-bg); color: var(--blue); }
+.row-card:hover, .row-card:active { background: var(--mint-soft); }
