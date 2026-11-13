@@ -34,7 +34,12 @@ export function commands(svc: IntakeService) {
     replyRevision: (id: string, role: Actor, input: Parameters<IntakeService['replyRevision']>[2]) => attempt(() => svc.replyRevision(id, role, input)),
     sendNotice: (id: string, role: Actor, input: Parameters<IntakeService['sendNotice']>[2]) => attempt(() => svc.sendNotice(id, role, input)),
     recordNotice: (id: string, role: Actor, input: Parameters<IntakeService['recordNotice']>[2]) => attempt(() => svc.recordNotice(id, role, input)),
-    submit: (id: string, role: Actor) => attempt(() => svc.submit(id, role)),
+    /** 상신은 되돌릴 수 없어 화면에서 한 번 더 확인한다(confirmed=false면 거부, 생략하면 기존처럼 처리). */
+    submit: (id: string, role: Actor, confirmed?: boolean) =>
+      attempt(async () => {
+        if (confirmed === false) throw new Error('CONFIRM_REQUIRED: 상신은 되돌릴 수 없어요. 확인 칸을 체크해 주세요');
+        await svc.submit(id, role);
+      }),
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),
     close: (id: string, role: Actor) => attempt(() => svc.close(id, role)),

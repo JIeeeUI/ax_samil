@@ -2,7 +2,7 @@ import type { IsoDate } from '../engine/types.js';
 import type { Role } from '../workflow/roles.js';
 import { CONTRACT_ID, type IntakeService, type ReplyValues } from './service.js';
 
-export type ScenarioName = 'normal' | 'change' | 'shortage';
+export type ScenarioName = 'normal' | 'change' | 'shortage' | 'check';
 export interface ScenarioReport { scenario: ScenarioName; lines: string[]; facts: Record<string, unknown> }
 
 const IN_BREACH: IsoDate = '2026-08-10'; // 하회 구간(7/21~8/21) 안
@@ -137,5 +137,90 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
     say(`혜인 기안 PLAN-001만 부결: ${facts.linkWarning}`);
   }
 
+  if (name === 'check') await runCheck(svc, say, facts);
+
   return { scenario: name, lines, facts };
+}
+
+const WON_EOK = (n: number) => `${(Math.round((n / 100_000_000) * 100) / 100).toFixed(2)}억 원`;
+
+/**
+ * 상신 전 점검 시연(기준일 7/1, 시계는 움직이지 않는다). 점검은 계산·판정·초안까지이고 상신·승인은 사람이 한다.
+ * 정상 / 변경(가정을 바꿔 재점검) / 정보 부족(확인 요청과 회신).
+ */
+async function runCheck(svc: IntakeService, say: (s: string) => void, facts: Record<string, unknown>): Promise<void> {
+  const label = async (id: string) => (await svc.listToday()).items.find((i) => i.id === id)!.checkLabel;
+  const LABEL_KO = { waiting_info: '확인 대기', ready: '상신 준비 완료', submitted: '상신함' } as const;
+  const lab = async (id: string) => { const l = await label(id); return l ? LABEL_KO[l] : '-'; };
+  const show = async (id: string) => { for (const l of (await svc.getCase(id)).check.lines) say(`  ${l}`); };
+
+  // ---- 1) 정상: PLAN-019(초혜핏 CMP-0005, 집행 9/14, 하회 구간 밖, 실질 ROAS 높음) ----
+  await svc.reset();
+  say('[정상] PLAN-019 점검(기준일 2026-07-01)');
+  const p19 = await svc.getCase('PLAN-019');
+  facts.normal = {
+    campaign: p19.item.campaign, settlementDate: p19.item.settlementDate, inBreach: p19.item.inBreach, route: p19.item.routeLevel,
+    realRoas: p19.check.evidence.realRoas, labelBefore: await label('PLAN-019'),
+  };
+  await show('PLAN-019');
+  say(`  → 점검 결과: ${await lab('PLAN-019')}`);
+  await svc.confirmFinance('PLAN-019', 'finance'); // 기존 상태 기계: 재무 확인 → 상신 가능
+  say('  (재무 확인 완료 후 마케팅이 확인 칸을 체크하고 상신 버튼을 누름: 상신은 사람이 하고 되돌릴 수 없음)');
+  await svc.submit('PLAN-019', 'marketing');
+  const after = await svc.getCase('PLAN-019');
+  (facts.normal as Record<string, unknown>).labelAfter = await label('PLAN-019');
+  (facts.normal as Record<string, unknown>).statusAfter = after.item.status;
+  say(`  → 상신 후: ${await lab('PLAN-019')}(${after.item.status}), 결재 ${after.item.routeLabel}`);
+
+  // ---- 2) 변경: PLAN-001(혜인)과 같은 날 마감 전속계약을 함께 보고 가정을 바꿔 재점검 ----
+  await svc.reset();
+  say('[변경] 혜인 PLAN-001과 전속계약(둘 다 결정 기한 2026-07-17)');
+  const both = async () => {
+    const out: Record<string, unknown> = {};
+    for (const id of ['PLAN-001', 'CONTRACT-INF-001']) {
+      const d = await svc.getCase(id);
+      out[id] = { route: d.item.routeLevel, realRoas: d.check.evidence.realRoas, influencerRealRoas: d.check.evidence.influencerRealRoas, stillLoss: d.check.evidence.stillLoss };
+    }
+    return out;
+  };
+  await show('PLAN-001');
+  facts.changeBase = await both();
+  const cut = async (sc: Parameters<IntakeService['setScenario']>[0], title: string) => {
+    await svc.setScenario(sc);
+    const v = await svc.listToday();
+    const d = await svc.getCase('PLAN-001');
+    const r = { route: d.item.routeLevel, contractRoute: (await svc.getCase('CONTRACT-INF-001')).item.routeLevel, breaches: v.breaches.map((b) => `${b.start}~${b.end}`), ...d.check.evidence };
+    say(`  가정 [${title}] → PLAN-001 ${r.route}, 전속계약 ${r.contractRoute}, 하회 ${r.breaches.join(', ') || '없음'}, 실질 ROAS ${r.realRoas?.toFixed(2)}${sc === 'demandOnly' ? ` → 혜인 ${(facts.changeBase as Record<string, { influencerRealRoas: number }>)['PLAN-001'].influencerRealRoas.toFixed(2)}→${r.influencerRealRoasDemandOnly?.toFixed(2)}(분리 보기 ${r.stillLoss ? '여전히 손실' : '손실 아님'}, 회사 손익은 그대로)` : ''}`);
+    return r;
+  };
+  const demand = await cut('demandOnly', '반품 원인 분리 보기');
+  await svc.setScenario('baseline');
+  const ar = await cut('arOverdueExcluded', '연체 매출채권 제외');
+  await svc.setScenario('baseline');
+  const lc = await cut('lc45', 'LC-0001 45일');
+  await svc.setScenario('baseline');
+  facts.changeKept = { demandOnly: { route: demand.route, stillLoss: demand.stillLoss }, arOverdueExcluded: { route: ar.route, breaches: ar.breaches } };
+  facts.changeChanged = { lc45: { route: lc.route, contractRoute: lc.contractRoute, breaches: lc.breaches } };
+  say('  유지: 반품 원인 분리·연체 매출채권 제외에서도 결론(CEO/이사회, 손실)은 그대로 / 변경: LC-0001 45일에서 하회가 사라져 PLAN-001 경로가 바뀜(전속계약 28억은 그대로 CEO/이사회)');
+
+  // ---- 3) 정보 부족: 전속계약 28억 지급일 미확인 ----
+  const infoRun = async (date: string) => {
+    await svc.reset();
+    const before = await lab('CONTRACT-INF-001');
+    await svc.confirmFinance('CONTRACT-INF-001', 'finance');
+    const asked = await lab('CONTRACT-INF-001');
+    const q = (await svc.getCase('CONTRACT-INF-001')).requests.find((r) => r.status === 'requested')!;
+    await svc.replyInfoRequest(q.id, { actor: q.ownerRole as Role, text: `회신(모의): ${date} 지급`, values: { cashOutflowDate: date }, simulated: true });
+    const d = await svc.getCase('CONTRACT-INF-001');
+    return { before, asked, owner: q.ownerRole, needed: q.needed, inBreach: d.item.inBreach, route: d.item.routeLevel, status: d.item.status, after: await lab('CONTRACT-INF-001'), amount: WON_EOK(d.item.amount) };
+  };
+  await svc.reset();
+  say('[정보 부족] 전속계약 28억: 고정 피 지급일 미확인');
+  await show('CONTRACT-INF-001');
+  const inside = await infoRun('2026-08-10');
+  say(`  점검 ${inside.before} → 재무 확인 요청(${inside.owner}, ${inside.needed}) → ${inside.asked} → 모의 회신 2026-08-10: 하회 구간 ${inside.inBreach}, 경로 ${inside.route}, 점검 ${inside.after}`);
+  const outside = await infoRun('2026-09-30');
+  say(`  점검 ${outside.before} → 재무 확인 요청 → ${outside.asked} → 모의 회신 2026-09-30: 하회 구간 ${outside.inBreach}, 경로 ${outside.route}, 점검 ${outside.after}`);
+  say('  주의: 28억은 어느 쪽이든 CEO/이사회 결정입니다. 회신이 바꾸는 것은 하회 구간 해당 여부와 상태(확인 대기 → 상신 준비 완료)이지 결재자가 아닙니다.');
+  facts.infoMissing = { inside, outside };
 }

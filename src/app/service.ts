@@ -11,7 +11,8 @@ import type { AlertRow, Clock, EventRow, InfoRequestRow, NoticeRow, Repo, Revisi
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
 import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
 import { SCHEDULE, canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
-import { canChangeContract, canReply, defaultOwnerFor, replyKeysFor } from '../workflow/ownership.js';
+import { computeCampaignPerformance, computeInfluencerPerformance } from '../engine/performance.js';
+import { canChangeContract, canReply, defaultOwnerFor, neededKo, replyKeysFor } from '../workflow/ownership.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
 
@@ -19,6 +20,17 @@ export const CONTRACT_ID = 'CONTRACT-INF-001';
 export interface ContractOverrides { annualFixedFeeKrw?: number; cashOutflowDate?: IsoDate | null }
 export type Actor = Role | 'system';
 export type Decision = 'approve' | { reject: { reason: string } } | { hold: HoldInput };
+/** 상신 전 점검 구간 라벨(상태 기계는 그대로, 상태와 열린 확인 요청에서 파생) */
+export type CheckLabel = 'waiting_info' | 'ready' | 'submitted';
+export interface CheckResult {
+  label: CheckLabel | null;
+  /** ① 누구 승인(이유) ② 실효 결정 기한·남은 일수·철회 불가 ③ 근거 ④ 빠진 정보와 물어볼 곳 */
+  lines: [string, string, string, string];
+  evidence: {
+    nominalRoas: number | null; realRoas: number | null; realRoasDemandOnly: number | null;
+    influencerRealRoas: number | null; influencerRealRoasDemandOnly: number | null; stillLoss: boolean | null;
+  };
+}
 export interface Rejection { reason: string; actor: string; date: IsoDate; stage: 'final' | 'primary' }
 export interface ReplyValues { cashOutflowDate?: IsoDate; annualFixedFeeKrw?: number }
 export interface Raised { caseId: string; stage: string; kind: 'alert' | 'escalation' | 'expired' | 'parallel' | 'warning' }
@@ -48,7 +60,7 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ checkLabel: CheckLabel | null; /** 잠정 */ provisional: boolean; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -66,6 +78,7 @@ export interface CaseDetail {
   /** 거절된 상태일 때 마지막 거절 사유 */
   rejection: Rejection | null;
   cashComparison: CashComparison;
+  check: CheckResult;
   revisions: RevisionRow[]; adjustments: AdjustmentRecord[];
   /** 자동 갱신 계약의 에이전시 통보 작업(결정이 난 뒤에만 있다) */
   notice: NoticeRow | null;
@@ -89,6 +102,14 @@ const RETURN_REASON_LABEL_KO: Record<ReturnReason, string> = { cash_breach: '현
 
 function adjustmentsFrom(events: EventRow[]): AdjustmentRecord[] {
   return events.filter((e) => e.action === 'adjust').flatMap((e) => ((e.detail as { changes?: AdjustmentRecord[] } | null)?.changes ?? []));
+}
+
+/** 상신 전 점검 라벨: 열린 확인 요청이나 빠진 정보가 있으면 확인 대기, 상신 전이고 막힘이 없으면 상신 준비 완료, 상신 이후는 상신함 */
+function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boolean): CheckLabel | null {
+  if (status === 'revision' || status === 'consulting') return null;
+  if (hasOpenRequest) return 'waiting_info';
+  if (status === 'finance_review' || status === 'routed') return missingInfo ? 'waiting_info' : 'ready';
+  return 'submitted';
 }
 
 function requireReason(reason: string | undefined): void {
@@ -284,6 +305,7 @@ export class IntakeService {
           const rv = reviews.get(k.id);
           return (!rv || rv.state === 'pending' || rv.state === 'held') && !(rv?.parallel);
         })(),
+        checkLabel: checkLabelFor(st.status, (owners.get(k.id) ?? []).length > 0, c.routes.get(k.id)!.needsInfo.length > 0),
         provisional: !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms'), inBreach: row.하회구간해당,
         issues: row.이슈 === '' ? [] : row.이슈.split(';'), nominalRank: row.명목순위, realRank: row.실질순위,
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
@@ -354,6 +376,7 @@ export class IntakeService {
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
       cashComparison: cashComparison(this.room.full, c.a),
+      check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
       noticeWarning: k.kind === 'contract' && needsEscalation(item.status) && item.daysLeft <= 3 && item.daysLeft >= 0
@@ -378,6 +401,46 @@ export class IntakeService {
     const why = used > 0 ? '반려는 한 번만 할 수 있어요(왕복 1회). 이번에는 의견을 붙여 상신하세요.'
       : !allowed ? '결정 기한까지 5일 이하라 반려할 수 없어요. 의견을 붙여 바로 상신하세요.' : null;
     return { allowed, why, dueIfReturnedToday: returnDueDate(c.clock.today, eff) };
+  }
+
+  /** 점검 결과 네 줄(계산·판정·초안까지만 한다. 상신·승인은 사람이 한다). */
+  private checkResult(c: Computed, item: TodayItem, route: Route, isContract: boolean, openRequests: InfoRequestRow[]): CheckResult {
+    const camps = computeCampaignPerformance(this.room, c.a);
+    const demand = { ...c.a, returnAttribution: 'demandOnly' as const };
+    const campsD = computeCampaignPerformance(this.room, demand);
+    const infs = computeInfluencerPerformance(this.room, c.a);
+    const infsD = computeInfluencerPerformance(this.room, demand);
+    const k = c.cases.find((x) => x.id === item.id)!;
+    const camp = k.campaignId ? camps.find((x) => x.campaignId === k.campaignId) : undefined;
+    const campD = k.campaignId ? campsD.find((x) => x.campaignId === k.campaignId) : undefined;
+    const inf = infs.find((x) => x.influencerId === k.influencerId);
+    const infD = infsD.find((x) => x.influencerId === k.influencerId);
+    const nominal = camp ? camp.nominalRoas : inf?.nominalRoas ?? null;
+    const real = camp ? camp.realRoas : inf?.realRoas ?? null;
+    const realD = campD ? campD.realRoas : infD?.realRoas ?? null;
+    const f2 = (n: number | null) => (n === null ? '계산 불가' : n.toFixed(2));
+    const gap = cashComparison(this.room.full, c.a);
+    const missing = [...new Set([...route.needsInfo, ...openRequests.map((q) => q.needed)])];
+    const ask = (needed: string) => {
+      const open = openRequests.find((q) => q.needed === needed);
+      const owner = open?.ownerRole ?? defaultOwnerFor(needed);
+      return `${neededKo(needed)} → ${isRole(owner) ? ROLE_LABEL[owner] : owner}에 확인${open ? '(요청함)' : ''}`;
+    };
+    const stillLoss = real !== null && realD !== null ? real < 0 && realD < 0 : null;
+    const unit = isContract ? '인플루언서' : '캠페인';
+    return {
+      label: item.checkLabel,
+      lines: [
+        `① ${ROUTE_LABEL[item.routeLevel]} 승인 필요 — ${route.reasons.join(' / ')}${item.provisional ? ' (잠정)' : ''}`,
+        `② 실효 결정 기한 ${item.effectiveDeadline}, 남은 ${item.daysLeft}일. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
+        `③ ${unit} 성과 명목 ROAS ${f2(nominal)} vs 실질 ROAS ${f2(real)}${real !== null && real < 0 ? '(광고비를 빼면 손해)' : ''}; 반품 원인 분리 보기[가정: 오배송·불량은 인플루언서 책임이 아님] 실질 ${f2(realD)}${stillLoss === true ? '(여전히 손실, 회사 손익은 그대로)' : ''}; ${gap.lines.join(', ')}${gap.needsFinanceCheck ? ' → 재무 확인 필요' : ''}`,
+        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}`,
+      ],
+      evidence: {
+        nominalRoas: nominal, realRoas: real, realRoasDemandOnly: realD,
+        influencerRealRoas: inf?.realRoas ?? null, influencerRealRoasDemandOnly: infD?.realRoas ?? null, stillLoss,
+      },
+    };
   }
 
   private lastRejection(events: EventRow[]): Rejection | null {

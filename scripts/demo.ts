@@ -1,5 +1,5 @@
 /**
- * 시연 3건 재현. 사용: npm run demo -- normal|change|shortage|all
+ * 시연 재현. 사용: npm run demo -- normal|change|shortage|all (all = 앞의 3건), check(상신 전 점검 시연)
  * 로컬 메모리 DB(PGlite)에서 실행하며 시나리오마다 처음부터 초기화한다. 원본 데이터룸은 읽기만 한다.
  * DATABASE_URL이 있으면 그 DB를 초기화하므로 운영 DB에는 쓰지 마세요.
  */
@@ -10,10 +10,11 @@ import { openDb } from '../src/store/db.js';
 import { Repo } from '../src/store/repo.js';
 
 const NAMES: ScenarioName[] = ['normal', 'change', 'shortage'];
+const ALLOWED: ScenarioName[] = [...NAMES, 'check'];
 const arg = process.argv[2] ?? 'all';
-const todo = arg === 'all' ? NAMES : NAMES.filter((n) => n === arg);
+const todo = arg === 'all' ? NAMES : ALLOWED.filter((n) => n === arg);
 if (todo.length === 0) {
-  console.error(`알 수 없는 시나리오: ${arg}. 사용 가능: ${NAMES.join(', ')}, all`);
+  console.error(`알 수 없는 시나리오: ${arg}. 사용 가능: ${ALLOWED.join(', ')}, all`);
   process.exit(2);
 }
 

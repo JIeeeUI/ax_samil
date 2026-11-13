@@ -3,7 +3,7 @@ import { getService } from '../../src/app/instance.js';
 import type { TodayItem } from '../../src/app/service.js';
 import { ROLE_LABEL } from '../../src/workflow/roles.js';
 import { Badge, Flash, routeTone } from '../components.js';
-import { WHO_DECIDES, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
+import { CHECK_LABEL, WHO_DECIDES, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
 import { currentRole } from '../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,7 @@ function CaseRow({ i, mine, hint }: { i: TodayItem; mine: boolean; hint?: string
         <span className="meta2">{koDate(i.effectiveDeadline)}까지 · {daysLeftText(i.daysLeft)}</span>
         <div className="chips">
           <Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
+          {i.checkLabel && <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge>}
           {serious > 0 && <Badge tone="red">주의 {serious}</Badge>}
         </div>
         {hint && <span className="meta2">{hint}</span>}

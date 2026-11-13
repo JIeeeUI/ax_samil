@@ -9,7 +9,7 @@ import {
   actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actRecordNotice, actResubmit, actRevisionReply, actSendNotice, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
-import { FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
+import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -46,10 +46,15 @@ export default async function CasePage({
 
       <div className="cols"><div className="col">
 
+      <section className="card-block">
+        <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
+        <ol className="plain">{d.check.lines.map((l) => <li key={l}>{l}</li>)}</ol>
+        <p className="meta">점검은 계산·판정·초안까지만 해요. 상신과 승인은 사람이 하고, 상신하면 되돌릴 수 없어요.</p>
+      </section>
       {step.kind === 'mine' && (
         <div className="cta">
           {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed} /><button type="submit">재무 확인 완료</button></form>}
-          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
+          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>

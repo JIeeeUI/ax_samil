@@ -72,6 +72,8 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
   return { kind: 'waiting', text: STATUS_PLAIN[s] };
 }
 
+export const CHECK_LABEL: Record<string, string> = { waiting_info: '확인 대기', ready: '상신 준비 완료', submitted: '상신함' };
+
 export const daysLeftText = (n: number) => (n < 0 ? `${-n}일 지남` : n === 0 ? '오늘까지' : `${n}일 남음`);
 
 /** 2026-07-17 → 7월 17일 */

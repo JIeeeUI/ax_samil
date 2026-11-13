@@ -69,7 +69,7 @@ export async function actSetReturnReasons(fd: FormData) {
   const returnReasons = Object.fromEntries(RETURN_REASONS.map((k) => [k, fd.get(`rr_${k}`) === 'on']));
   return done(fd, await (await cmd()).setConfig({ returnReasons }));
 }
-export async function actSubmit(fd: FormData) { return done(fd, await (await cmd()).submit(field(fd, 'id'), await currentRole())); }
+export async function actSubmit(fd: FormData) { return done(fd, await (await cmd()).submit(field(fd, 'id'), await currentRole(), field(fd, 'confirm') === 'yes')); }
 export async function actResubmit(fd: FormData) { return done(fd, await (await cmd()).resubmit(field(fd, 'id'), await currentRole())); }
 export async function actClose(fd: FormData) { return done(fd, await (await cmd()).close(field(fd, 'id'), await currentRole())); }
 

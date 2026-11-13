@@ -15,6 +15,17 @@ export const OWNER_BY_NEEDED: Readonly<Record<string, Role>> = {
   expected_gmv_basis: 'marketing',
 };
 
+/** 확인할 것의 쉬운 이름(점검 결과의 "빠진 정보"에 쓴다) */
+export const NEEDED_KO: Readonly<Record<string, string>> = {
+  cash_outflow_date: '돈이 나가는 날(현금 유출일)',
+  payment_schedule: '고정 비용 지급 일정',
+  performance_fee_terms: '성과 피 조건(포함하면 연 10억 원을 넘는지)',
+  contract_text: '계약 원문',
+  notice_receipt_proof: '통보 수령 증빙',
+  expected_gmv_basis: '예상 GMV 근거',
+};
+export const neededKo = (needed: string): string => (Object.hasOwn(NEEDED_KO, needed) ? NEEDED_KO[needed] : needed);
+
 /** 무엇을 확인하느냐에 맞는 기본 담당. 목록에 없으면 재무. */
 export function defaultOwnerFor(needed: string): Role {
   return Object.hasOwn(OWNER_BY_NEEDED, needed) ? OWNER_BY_NEEDED[needed] : 'finance';
