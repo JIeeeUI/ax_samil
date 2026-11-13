@@ -275,3 +275,4 @@ table.hist th small { display: block; font-weight: 400; }
 .facts li:has(ul.attn) { flex-direction: column; gap: 4px; }
 .facts li:has(ul.attn) .v { text-align: left; font-weight: 500; width: 100%; }
 .facts ul.attn > li { justify-content: flex-start; border-bottom: 0; padding: 5px 0; }
+.warn-ico { color: var(--accent); vertical-align: -3px; margin-right: 6px; flex: none; }

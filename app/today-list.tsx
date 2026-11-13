@@ -94,8 +94,13 @@ export function TodayList({ rows, tabLabel }: { rows: ListRow[]; tabLabel: strin
               <td data-label="주의할 점">
                 {i.attnCount === 0 ? <span className="muted">—</span> : (
                   <>
+                    <svg className="warn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                      <path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                      <path d="M8 6v4M8 11.6v.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                    <span className="sr">주의할 점 {i.attnCount}가지: </span>
                     <span className={`tag tag-${i.attnTier}`}>{i.attnTag}</span>
-                    <span className="muted nowrap"> 주의할 점 {i.attnCount}가지</span>
+                    {i.attnCount > 1 && <span className="muted nowrap"> 외 {i.attnCount - 1}개</span>}
                   </>
                 )}
               </td>
