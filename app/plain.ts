@@ -73,6 +73,16 @@ export function nextStep(item: TodayItem, role: Role): NextStep {
   return { kind: 'waiting', text: STATUS_PLAIN[s] };
 }
 
+/** 목록용 짧은 표기. 상태(진행 단계)와 재무 확인(점검 결과)을 따로 보여 준다. */
+export const STATUS_SHORT: Record<string, string> = {
+  finance_review: '재무 확인 중', routed: '상신 전', submitted: '결정 대기', approved: '승인', rejected: '거절', on_hold: '확인 요청 중',
+  revision: '보완 요청', consulting: '협의 중', overdue: '기한 경과', closed: '종결',
+};
+export const CHECK_SHORT: Record<string, { text: string; tone: 'ok' | 'bad' | '' }> = {
+  finance_pending: { text: '대기', tone: '' }, waiting_info: { text: '정보 필요', tone: 'bad' },
+  ready: { text: '정상', tone: 'ok' }, submitted: { text: '정상', tone: 'ok' },
+};
+
 export const CHECK_LABEL: Record<string, string> = { waiting_info: '확인 대기', finance_pending: '재무 확인 대기', ready: '상신 준비 완료', submitted: '상신함' };
 
 export const daysLeftText = (n: number) => (n < 0 ? `${-n}일 지남` : n === 0 ? '오늘까지' : `${n}일 남음`);

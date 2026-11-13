@@ -73,6 +73,10 @@ export function CashTimeline({
         {breaches.map((b) => (
           <span key={`l${b.start}`} className="tl-label" style={{ left: pos(b.start) }}>현금 부족 구간 {md(b.start)}–{md(b.end)}</span>
         ))}
+        {breaches.flatMap((b) => [
+          <span key={`s${b.start}`} className="tl-edge" style={{ left: pos(b.start) }}><i>{md(b.start)} 시작</i></span>,
+          <span key={`e${b.end}`} className="tl-edge" style={{ left: pos(b.end) }}><i>{md(b.end)} 끝</i></span>,
+        ])}
         {ticks.map((t, n) => (
           <span key={t} className={`tl-tick${n % 2 ? ' alt' : ''}`} style={{ left: pos(t) }}><i>{md(t)}</i></span>
         ))}

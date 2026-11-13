@@ -8,12 +8,15 @@ export interface ListRow {
   name: string; // 인플루언서
   kind: string; // 유형
   amountText: string;
-  amountTitle: string;
   deadline: string; // 7월 17일
   daysLeft: string;
   who: string;
-  status: string;
-  serious: number;
+  status: string; // 진행 단계(짧게)
+  check: string; // 재무 확인(대기·정상·정보 필요)
+  checkTone: 'ok' | 'bad' | '';
+  attnCount: number;
+  attnTag: string;
+  attnTier: 'high' | 'mid' | 'low' | '';
   mine: boolean;
   hay: string; // 검색용 문자열(화면에 보이지 않는 값 포함)
 }
@@ -35,7 +38,7 @@ export function norm(s: string): string {
 export function matches(row: ListRow, query: string): boolean {
   const tokens = norm(query.trim()).split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return true;
-  const hay = norm(`${row.hay} ${row.name} ${row.kind} ${row.amountText} ${row.deadline} ${row.who} ${row.status}`);
+  const hay = norm(`${row.hay} ${row.name} ${row.kind} ${row.amountText} ${row.deadline} ${row.who} ${row.status} ${row.check} ${row.attnTag}`);
   return tokens.every((t) => hay.includes(t));
 }
 
@@ -74,7 +77,7 @@ export function TodayList({ rows, tabLabel }: { rows: ListRow[]; tabLabel: strin
 
       <table className="list">
         <thead>
-          <tr><th>제안</th><th>유형</th><th className="num">금액</th><th>결정 기한</th><th>결정자</th><th>상태</th></tr>
+          <tr><th>제안</th><th>유형</th><th className="num">금액</th><th>결정 기한</th><th>결정자</th><th>상태</th><th>재무 확인</th><th>주의할 점</th></tr>
         </thead>
         <tbody>
           {shown.map((i) => (
@@ -83,18 +86,24 @@ export function TodayList({ rows, tabLabel }: { rows: ListRow[]; tabLabel: strin
                 <Link href={`/cases/${i.id}`} className="rowlink" aria-label={`${i.name} ${i.kind} ${i.amountText} 상세 열기`}>{i.name}</Link>
               </td>
               <td data-label="유형">{i.kind}</td>
-              <td data-label="금액" className="num" title={i.amountTitle}>{i.amountText}</td>
+              <td data-label="금액" className="num">{i.amountText}</td>
               <td data-label="결정 기한">{i.deadline} <span className="muted">{i.daysLeft}</span></td>
               <td data-label="결정자">{i.who}</td>
-              <td data-label="상태">
-                {i.mine && <strong>내 차례 · </strong>}{i.status}
-                {i.serious > 0 && <span className="accent" title="먼저 확인할 점이 있는 건입니다. 상세에서 확인합니다."> · 주의 {i.serious}<span className="sr-only"> (먼저 확인할 점 {i.serious}건)</span></span>}
+              <td data-label="상태">{i.mine && <strong>내 차례 · </strong>}{i.status}</td>
+              <td data-label="재무 확인" className={i.checkTone ? `chk chk-${i.checkTone}` : 'chk'}>{i.check || '—'}</td>
+              <td data-label="주의할 점">
+                {i.attnCount === 0 ? <span className="muted">—</span> : (
+                  <>
+                    <span className={`tag tag-${i.attnTier}`}>{i.attnTag}</span>
+                    <span className="muted nowrap"> 주의할 점 {i.attnCount}가지</span>
+                  </>
+                )}
               </td>
             </tr>
           ))}
           {shown.length === 0 && (
             <tr className="empty">
-              <td colSpan={6}>
+              <td colSpan={8}>
                 {active ? (
                   <>&lsquo;{q.trim()}&rsquo;에 맞는 건이 없습니다. <button type="button" className="sbtn" onClick={clear}>검색 지우기</button></>
                 ) : '해당하는 건이 없습니다.'}

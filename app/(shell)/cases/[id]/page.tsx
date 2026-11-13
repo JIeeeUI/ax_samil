@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { summarizeForApproval } from '../../../../src/ai/assist.js';
-import { createProvider } from '../../../../src/ai/provider.js';
+import { Suspense } from 'react';
 import { getService } from '../../../../src/app/instance.js';
+import { TIER_LABEL } from '../../../../src/workflow/attention.js';
 import { canChangeContract, defaultOwnerFor } from '../../../../src/workflow/ownership.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
 import { RETURN_REASONS, RETURN_REASON_LABEL } from '../../../../src/workflow/schedule.js';
@@ -11,8 +11,9 @@ import {
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { CashNote, CheckList } from '../../../check-ui.js';
 import { formal } from '../../../formal.js';
-import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
+import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
+import { ApproverSummary, SummaryLoading } from './summary.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export default async function CasePage({
   const i = d.item;
   const r = d.row;
   const back = `/cases/${id}`;
-  const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null, { requested: ai === '1' });
+  const att = i.attention;
   const decider = decisionRole(i.routeLevel);
   // 1차/2차를 켠 경우 CEO/이사회는 1차 상신 또는 긴급 병행 상신 뒤에만 결정한다.
   const canSecond = !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
@@ -40,7 +41,6 @@ export default async function CasePage({
   const noteMatch = step.text.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
   const stepMain = noteMatch ? noteMatch[1] : step.text;
   const stepNote = noteMatch ? noteMatch[2] : '';
-  const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).filter(Boolean);
   return (
     <>
       <Flash error={error} />
@@ -196,12 +196,22 @@ export default async function CasePage({
           <li><span className="k">결정하는 사람</span><span className="v"><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
             {i.boardDate && <small>기한 전 이사회 {koDate(i.boardDate)}</small>}</span></li>
           <li><span className="k">결정 기한</span><span className="v">{koDate(i.effectiveDeadline)}<small>{daysLeftText(i.daysLeft)}</small></span></li>
-          <li><span className="k">확인할 점</span>
-            <span className="v">{i.issues.length === 0 ? '없습니다' : (
-              <ul className="plain pts">{i.issues.map((c) => <li key={c}><span className={issuePlain(c).serious ? 'pt warn' : 'pt'} aria-hidden>{issuePlain(c).serious ? '⚠' : '•'}</span>{issuePlain(c).text}</li>)}</ul>
+          <li><span className="k">주의할 점{att.count > 0 ? ` ${att.count}가지` : ''}</span>
+            <span className="v">{att.count === 0 ? '없습니다' : (
+              <ul className="attn">{att.items.map((a) => (
+                <li key={a.code}>
+                  <span className={`tier tier-${a.tier}`} aria-label={`중요도 ${TIER_LABEL[a.tier]}`}>{TIER_LABEL[a.tier]}</span>
+                  <div className="attn-body">
+                    <span>{a.text}</span>
+                    {a.details.length > 0 && (
+                      <details className="more"><summary>상세</summary>{a.details.map((x) => <p key={x}>{formal(x)}</p>)}</details>
+                    )}
+                  </div>
+                </li>
+              ))}</ul>
             )}</span></li>
         </ul>
-        {i.provisional && <p className="meta">잠정 판정입니다. 성과 피 조건이 확인되면 결정하는 사람이 바뀔 수 있습니다.</p>}
+        {att.count > 0 && <p className="meta">중요도: 상 → 중 → 하 순서로 보여 줍니다. 같은 뜻의 경고는 한 줄로 묶었습니다.</p>}
         {i.settlementDate !== '' && i.settlementDate < i.deadline && <p className="meta">계약 확정일은 {koDate(i.deadline)}이지만, 돈이 먼저 나가는 날({koDate(i.settlementDate)})이 있어 그 전에 결정해야 합니다.</p>}
       </section>
 
@@ -210,7 +220,6 @@ export default async function CasePage({
           <strong>기한이 코앞입니다.</strong> 결정 없이 {koDate(i.effectiveDeadline)}이 지나면 그대로 확정(또는 집행)됩니다. 선택지: {d.escalation.map((o) => ESCALATION_LABEL[o]).join(' · ')}
         </div>
       )}
-      {d.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {formal(w.message)}</div>)}
       {openReqs.length > 0 && (
         <div className="flash flash-ok">
           <strong>답을 기다리는 확인 요청 {openReqs.length}건</strong>
@@ -239,21 +248,26 @@ export default async function CasePage({
         {r.기안예상GMV !== '' && <p className="meta">요청서의 예상 매출 {won(r.기안예상GMV)}은 쿠폰·반품·광고비를 빼기 전 숫자라 이것만으로는 승인 근거가 되지 않습니다.</p>}
       </details>
 
-      <details className="fold"><summary>결재자용 요약 문장 {summary.source === 'ai' ? '(AI 작성)' : '(자동 작성)'}</summary>
-        <div className="panel">
-          <ul className="lines">{sentences(formal(summary.text)).map((s) => <li key={s}>{s}</li>)}</ul>
-          {summary.note && <p className="meta">{formal(summary.note)}</p>}
-          <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link></p>
-        </div>
-      </details>
+      <Suspense key={ai === '1' ? 'ai' : 'basic'} fallback={<SummaryLoading />}>
+        <ApproverSummary d={d} back={back} askAi={ai === '1'} />
+      </Suspense>
 
-      <details className="fold"><summary>처리 기록 {d.events.length}건</summary>
-        <div className="panel"><table><thead><tr><th>날짜</th><th>누가</th><th>무엇을</th></tr></thead>
-          <tbody>{d.events.map((e) => (
-            <tr key={e.id}>
-              <td>{e.business_date}</td>
-              <td>{e.actor_role === 'system' ? '자동 처리' : ROLE_LABEL[e.actor_role as keyof typeof ROLE_LABEL] ?? e.actor_role}{e.simulated && <Badge tone="blue">시연</Badge>}</td>
-              <td>{ACTION_LABEL[e.action] ?? e.action}</td>
+      <details className="fold"><summary>처리 기록 {d.history.length}건</summary>
+        <div className="panel tablewrap"><table className="hist">
+          <thead>
+            <tr>
+              <th>날짜<small>(시연 업무일)</small></th>
+              <th title="실제로 기록된 시각입니다. 날짜는 시연용 업무일이라 다를 수 있습니다.">시각<small>(실제 기록)</small></th>
+              <th>보낸 사람</th><th>받는 부서(담당자)</th><th>무엇을</th>
+            </tr>
+          </thead>
+          <tbody>{d.history.map((h) => (
+            <tr key={h.id}>
+              <td>{h.businessDate}{h.simulated && <> <span className="muted">시연</span></>}</td>
+              <td className="num">{h.time}</td>
+              <td>{h.from.role === 'system' ? '자동 처리' : `${h.from.team}${h.from.name !== h.from.team ? ` ${h.from.name}` : ''}`}</td>
+              <td>{h.to ? h.to.label : '—'}</td>
+              <td>{ACTION_LABEL[h.action] ?? h.action}</td>
             </tr>
           ))}</tbody></table></div>
       </details>
