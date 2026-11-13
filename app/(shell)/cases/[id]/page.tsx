@@ -24,7 +24,7 @@ export default async function CasePage({
   const i = d.item;
   const r = d.row;
   const back = `/cases/${id}`;
-  const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null);
+  const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null, { requested: ai === '1' });
   const decider = decisionRole(i.routeLevel);
   // 1차/2차를 켠 경우 CEO/이사회는 1차 상신 또는 긴급 병행 상신 뒤에만 결정한다.
   const canSecond = !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;

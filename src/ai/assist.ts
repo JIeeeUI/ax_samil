@@ -4,10 +4,15 @@ import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import type { CaseDetail, ReplyValues } from '../app/service.js';
 import { ROLE_LABEL, isRole } from '../workflow/roles.js';
-import type { AiProvider } from './provider.js';
+import { AiError, type AiErrorCode, type AiProvider } from './provider.js';
 import { extractTokens, verifyFacts, type Facts } from './verify.js';
 
-export interface AssistResult { text: string; source: 'ai' | 'template'; note: string }
+/**
+ * 결과 모양: text(화면에 쓸 문장), source('ai' | 'fallback' = 템플릿 대체), note(사람이 읽는 설명),
+ * error(대체된 이유: no_key | timeout | http_error | verify_failed, AI를 요청하지 않았으면 없음).
+ */
+export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode }
+export interface AssistOptions { /** 사용자가 AI 사용을 요청했는지(요청했는데 키가 없으면 no_key) */ requested?: boolean }
 
 const won = formatMan;
 const NEEDED_LABEL: Record<string, string> = {
@@ -53,32 +58,32 @@ function templateSummary(d: CaseDetail): string {
 }
 
 /** AI 호출 → 숫자 대조 → 통과하면 AI 문장, 아니면 템플릿. */
-async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, template: string): Promise<AssistResult> {
-  if (!ai) return { text: template, source: 'template', note: 'AI 미사용' };
+async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, template: string, requested = false): Promise<AssistResult> {
+  if (!ai) return { text: template, source: 'fallback', note: 'AI 미사용', ...(requested ? { error: 'no_key' as const } : {}) };
   try {
     const out = (await ai.complete(prompt)).trim();
     if (out === '' || !verifyFacts(out, buildFacts(d)).ok) {
-      return { text: template, source: 'template', note: 'AI 문장 숫자 불일치: 미반영' };
+      return { text: template, source: 'fallback', note: 'AI 문장 숫자 불일치: 미반영', error: 'verify_failed' };
     }
     return { text: out, source: 'ai', note: '' };
   } catch (e) {
-    return { text: template, source: 'template', note: `AI 호출 실패: ${(e as Error).message}` };
+    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error' };
   }
 }
 
 const RULES = '새로운 숫자나 날짜를 만들지 말고, 승인·거절을 결정하거나 권하지 마세요. 한국어로 답하세요.';
 
-export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null): Promise<AssistResult> {
+export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const t = templateSummary(d);
-  return guarded(d, ai, `결재자가 읽을 3문장 이내 상신 근거 요약을 쓰세요. 아래 사실만 사용합니다. ${RULES}\n사실: ${t}`, t);
+  return guarded(d, ai, `결재자가 읽을 3문장 이내 상신 근거 요약을 쓰세요. 아래 사실만 사용합니다. ${RULES}\n사실: ${t}`, t, opts.requested);
 }
 
-export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null): Promise<AssistResult> {
+export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const req = d.requests.find((r) => r.needed === needed && r.status === 'requested');
   const owner = req && isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : 'Masil 재무팀';
   const label = NEEDED_LABEL[needed] ?? needed;
   const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${NEEDED_WHY[needed] ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
-  return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t);
+  return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t, opts.requested);
 }
 
 function templateCandidates(text: string): ReplyValues {
