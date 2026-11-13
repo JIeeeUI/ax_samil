@@ -33,6 +33,54 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const { error } = await searchParams;
   const svc = await getService();
   const [v, role] = [await svc.listToday(), await currentRole()];
+  if (role === 'marketing') {
+    // 마케팅 담당의 첫 화면 = 상신 전 점검. 점검 결과(라벨)별로 나누어 보여 준다.
+    const ready = v.items.filter((i) => i.checkLabel === 'ready');
+    const needInfo = v.items.filter((i) => i.checkLabel === 'waiting_info');
+    const sent = v.items.filter((i) => i.checkLabel === 'submitted');
+    const hintFor = (i: TodayItem) => (i.status === 'routed' ? '지금 상신할 수 있어요' : i.status === 'finance_review' ? '재무 확인이 끝나면 상신할 수 있어요' : nextStep(i, role).text);
+    return (
+      <>
+        <Flash error={error} />
+        <h1>{ready.length > 0 ? `상신 준비 완료 ${ready.length}건` : needInfo.length > 0 ? `확인이 더 필요한 건 ${needInfo.length}건` : '점검할 건이 없어요'}<small>상신 전 점검 · {ROLE_LABEL[role]}</small></h1>
+        <p className="sub">카드를 열면 ① 누가 승인하나 ② 언제까지인가 ③ 근거 ④ 빠진 정보를 한눈에 볼 수 있어요. 점검은 계산·판정까지만 하고, 상신은 사람이 눌러요.</p>
+        {v.breaches.length > 0 && (
+          <div className="flash flash-warn">
+            <strong>{v.breaches.map((b) => `${koDate(b.start)} ~ ${koDate(b.end)}`).join(', ')}</strong>에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
+          </div>
+        )}
+        {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
+        {v.openRequests > 0 && (
+          <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 보기</span></div><span className="go" aria-hidden>›</span></Link>
+        )}
+
+        <h2>상신 준비 완료 <small>{ready.length}건</small></h2>
+        {ready.length === 0 && <p className="meta">아직 없어요. 아래 “확인이 더 필요해요”를 먼저 확인해 보세요.</p>}
+        <div className="cardgrid">{ready.slice(0, SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine hint={hintFor(i)} />)}</div>
+        {ready.length > SHOW_FIRST && (
+          <details className="fold"><summary>나머지 {ready.length - SHOW_FIRST}건 더 보기</summary>
+            <div className="cardgrid">{ready.slice(SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine hint={hintFor(i)} />)}</div></details>
+        )}
+
+        {needInfo.length > 0 && (
+          <>
+            <h2>확인이 더 필요해요 <small>{needInfo.length}건</small></h2>
+            <div className="cardgrid">{needInfo.slice(0, SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine={false} hint="빠진 정보가 있어요. 카드를 열어 물어볼 곳을 확인하세요" />)}</div>
+            {needInfo.length > SHOW_FIRST && (
+              <details className="fold"><summary>나머지 {needInfo.length - SHOW_FIRST}건 더 보기</summary>
+                <div className="cardgrid">{needInfo.slice(SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine={false} hint="빠진 정보가 있어요" />)}</div></details>
+            )}
+          </>
+        )}
+        {sent.length > 0 && (
+          <details className="fold"><summary>이미 상신한 건 {sent.length}건</summary>
+            <div className="cardgrid">{sent.map((i) => <CaseRow key={i.id} i={i} mine={false} hint={nextStep(i, role).text} />)}</div></details>
+        )}
+        <p className="meta">캠페인 요청액(표본 자료)과 연간 계약 금액(회사 실제 규모)은 더하지 않고 따로 봐요.</p>
+      </>
+    );
+  }
+
   const steps = v.items.map((i) => ({ i, s: nextStep(i, role) }));
   const mine = steps.filter((x) => x.s.kind === 'mine').map((x) => x.i);
   const waiting = steps.filter((x) => x.s.kind === 'waiting');
