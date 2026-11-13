@@ -62,17 +62,21 @@ main { padding-top: 12px; padding-bottom: 88px; }
 /* ---- 현금 타임라인 ---- */
 .tl { padding: 12px 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .tl-plot { position: relative; height: 84px; }
-.tl-axis { position: absolute; left: 0; right: 0; top: 40px; height: 1px; background: var(--ink); }
+.tl-axis { position: absolute; left: 0; right: 0; top: 56px; height: 1px; background: var(--ink); }
 /* 현금 부족 구간: 띠 안쪽을 연한 빨강으로 채운다 */
-.tl-band { position: absolute; top: 28px; height: 25px; background: var(--accent-soft); }
+.tl-band { position: absolute; top: 44px; height: 25px; background: var(--accent-soft); }
 .tl-label { position: absolute; top: 8px; text-align: center; overflow: hidden; font-size: 0.76rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
-.tl-tick { position: absolute; top: 40px; width: 0; height: 8px; border-left: 1px solid var(--muted); }
+.tl-tick { position: absolute; top: 56px; width: 0; height: 8px; border-left: 1px solid var(--muted); }
 .tl-tick i { position: absolute; top: 12px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tl-today { position: absolute; top: 20px; height: 28px; border-left: 1px dashed var(--muted); }
+.tl-today { position: absolute; top: 18px; height: 38px; border-left: 1px dashed var(--muted); }
 .tl-today i { position: absolute; top: -14px; left: 4px; font-style: normal; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
 
 /* 점 하나 = 건 하나. 구간 안의 점만 포인트색 */
-.tl-dot, .tl-group { position: absolute; top: 40px; transform: translate(-50%, -50%); }
+.tl-dot, .tl-group { position: absolute; top: 56px; transform: translate(-50%, -50%); }
+/* 같은 날 여러 건의 배지는 축 위쪽 줄에 두어 옆 날짜의 점을 가리지 않게 한다 */
+.tl-group { top: 32px; }
+.tl-group::before { content: ''; position: absolute; left: 50%; top: 100%; height: 14px; border-left: 1px solid var(--muted); }
+.tl-group.red::before { border-left-color: var(--accent); }
 .tl-dot { display: block; border-radius: 50%; background: var(--ink); text-decoration: none; }
 .tl-dot.red { background: var(--accent); }
 .tl-dot.hollow { background: var(--bg); border: 2px solid var(--ink); }
@@ -252,9 +256,9 @@ table.list tr.empty td { text-align: left; }
 .tag-high { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* 타임라인: 현금 부족 구간 시작·끝 표식 */
-.tl-edge { position: absolute; top: 24px; height: 31px; border-left: 2px solid var(--accent); }
+.tl-edge { position: absolute; top: 18px; height: 51px; border-left: 2px solid var(--accent); }
 .tl-edge i { position: absolute; top: -18px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.72rem; font-weight: 700; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.tl-plot { height: 84px; }
+.tl-plot { height: 100px; }
 @media (max-width: 720px) { .tl-label { display: none; } }
 
 /* 건 상세: 주의할 점(중요도 상·중·하) */
