@@ -11,7 +11,7 @@ import { extractTokens, verifyFacts, type Facts } from './verify.js';
  * 결과 모양: text(화면에 쓸 문장), source('ai' | 'fallback' = 템플릿 대체), note(사람이 읽는 설명),
  * error(대체된 이유: no_key | timeout | http_error | verify_failed, AI를 요청하지 않았으면 없음).
  */
-export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode }
+export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode; /** 구글 등 서버가 돌려준 HTTP 상태(있을 때만) */ status?: number }
 export interface AssistOptions { /** 사용자가 AI 사용을 요청했는지(요청했는데 키가 없으면 no_key) */ requested?: boolean }
 
 const won = formatMan;
@@ -67,7 +67,7 @@ async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, tem
     }
     return { text: out, source: 'ai', note: '' };
   } catch (e) {
-    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error' };
+    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error', ...(e instanceof AiError && e.status !== undefined ? { status: e.status } : {}) };
   }
 }
 
