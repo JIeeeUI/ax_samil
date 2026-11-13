@@ -3,7 +3,7 @@ import type { IsoDate } from './types.js';
 /** confirmed: 원본 확정 / benchmark: 외부 벤치마크 / assumption: 자료에 없어 정한 값 */
 export type Label = 'confirmed' | 'benchmark' | 'assumption';
 
-export type ScenarioId = 'baseline' | 'arOverdueExcluded' | 'apOverdueExcluded' | 'bothOverdueExcluded' | 'lc45' | 'demandOnly';
+export type ScenarioId = 'baseline' | 'arOverdueExcluded' | 'apOverdueExcluded' | 'bothOverdueExcluded' | 'lc45';
 
 type LabeledField = 'unitsPerOrder' | 'channelFeeBasis' | 'recoverCostOnRefund' | 'calcMode' | 'overdueAr' | 'overdueAp' | 'lc0001TermsDays' | 'returnAttribution';
 
@@ -63,11 +63,13 @@ export const SCENARIOS: Record<ScenarioId, AssumptionSet> = {
   arOverdueExcluded: { ...BASE, id: 'arOverdueExcluded', overdueAr: 'exclude' },
   apOverdueExcluded: { ...BASE, id: 'apOverdueExcluded', overdueAp: 'exclude' },
   bothOverdueExcluded: { ...BASE, id: 'bothOverdueExcluded', overdueAr: 'exclude', overdueAp: 'exclude' },
-  demandOnly: { ...BASE, id: 'demandOnly', returnAttribution: 'demandOnly' },
   lc45: { ...BASE, id: 'lc45', lc0001TermsDays: 45, labels: { ...BASE.labels, lc0001TermsDays: 'assumption' } },
 };
 
 export const DEFAULT_ASSUMPTIONS = SCENARIOS.baseline;
+
+/** 반품 원인 분리 보기(인플루언서 평가용). 가정 세트가 아니라 점검 결과에 별도 숫자로만 쓰고 판정·승인 경로에는 쓰지 않는다. */
+export const DEMAND_ONLY_VIEW: AssumptionSet = { ...BASE, returnAttribution: 'demandOnly' };
 
 export const THRESHOLDS = {
   perItemKrw: 10_000_000,

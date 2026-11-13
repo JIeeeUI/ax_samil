@@ -190,11 +190,13 @@ async function runCheck(svc: IntakeService, say: (s: string) => void, facts: Rec
     const v = await svc.listToday();
     const d = await svc.getCase('PLAN-001');
     const r = { route: d.item.routeLevel, contractRoute: (await svc.getCase('CONTRACT-INF-001')).item.routeLevel, breaches: v.breaches.map((b) => `${b.start}~${b.end}`), ...d.check.evidence };
-    say(`  가정 [${title}] → PLAN-001 ${r.route}, 전속계약 ${r.contractRoute}, 하회 ${r.breaches.join(', ') || '없음'}, 실질 ROAS ${r.realRoas?.toFixed(2)}${sc === 'demandOnly' ? ` → 혜인 ${(facts.changeBase as Record<string, { influencerRealRoas: number }>)['PLAN-001'].influencerRealRoas.toFixed(2)}→${r.influencerRealRoasDemandOnly?.toFixed(2)}(분리 보기 ${r.stillLoss ? '여전히 손실' : '손실 아님'}, 회사 손익은 그대로)` : ''}`);
+    say(`  가정 [${title}] → PLAN-001 ${r.route}, 전속계약 ${r.contractRoute}, 하회 ${r.breaches.join(', ') || '없음'}`);
     return r;
   };
-  const demand = await cut('demandOnly', '반품 원인 분리 보기');
-  await svc.setScenario('baseline');
+  // 반품 원인 분리 보기는 가정 전환이 아니라 평가용 보기다: 판정·경로·하회는 그대로이고 성과 숫자만 나란히 본다.
+  const ev = (await svc.getCase('PLAN-001')).check.evidence;
+  say(`  보기 [반품 원인 분리, 가정: 오배송·불량은 인플루언서 책임이 아님] → PLAN-001 캠페인 실질 ROAS ${ev.realRoas?.toFixed(2)}→${ev.realRoasDemandOnly?.toFixed(2)}, 혜인 ${ev.influencerRealRoas?.toFixed(2)}→${ev.influencerRealRoasDemandOnly?.toFixed(2)}(${ev.stillLoss ? '여전히 손실' : '손실 아님'}). 경로·하회는 그대로, 회사 손익은 바뀌지 않음`);
+  const demand = { route: (await svc.getCase('PLAN-001')).item.routeLevel, stillLoss: ev.stillLoss };
   const ar = await cut('arOverdueExcluded', '연체 매출채권 제외');
   await svc.setScenario('baseline');
   const lc = await cut('lc45', 'LC-0001 45일');

@@ -27,7 +27,7 @@ export default async function CasePage({
   const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null);
   const decider = decisionRole(i.routeLevel);
   // 1차/2차를 켠 경우 CEO/이사회는 1차 상신 또는 긴급 병행 상신 뒤에만 결정한다.
-  const canSecond = !(await svc.getConfig()).showExtended || !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
+  const canSecond = !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
   const step = nextStep(i, role);
   const at = flowIndex(i.status);
   const hidden = <><input type="hidden" name="id" value={id} /><input type="hidden" name="back" value={back} /></>;
@@ -53,8 +53,8 @@ export default async function CasePage({
       </section>
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={!cfg.showExtended || d.returnState.allowed ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={cfg.showExtended && !d.returnState.allowed} /><button type="submit">재무 확인 완료</button></form>}
-          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed || !(cfg.showExtended || d.revisions.length > 0) ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed && (cfg.showExtended || d.revisions.length > 0)} /><button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있어요(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 돼요.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>
@@ -93,7 +93,7 @@ export default async function CasePage({
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
       {d.cashComparison.needsFinanceCheck && <div className="flash flash-warn"><strong>재무 확인 필요(공식 현금 전망과 차이)</strong> {d.cashComparison.lines.join(' / ')}<br /><small>{d.cashComparison.unverified.join(' · ')}</small></div>}
-      {cfg.showExtended && d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
+      {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
       {cfg.showExtended && d.notice && d.notice.status !== 'void' && (
         <section className="card-block">
           <h2>에이전시 통보 <small>(발송은 마케팅, 기록은 계약 담당 · 교육용 가정)</small></h2>
@@ -149,7 +149,7 @@ export default async function CasePage({
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
       {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
 
-      {cfg.showExtended && d.review && (
+      {d.review && (
         <section className="card-block">
           <h2>결재 단계 <small>(1차 대표 검토 → 2차 CEO/이사회 결정 · 교육용 가정)</small></h2>
           <ol className="plain">

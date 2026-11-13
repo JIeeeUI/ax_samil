@@ -13,7 +13,6 @@ const SCENARIO_WHY: Record<string, string> = {
   arOverdueExcluded: '기준일 전에 이미 늦어진 외상매출은 못 받는다고 가정해 봅니다.',
   apOverdueExcluded: '기준일 전에 이미 늦어진 외상매입은 내지 않는다고 가정해 봅니다.',
   bothOverdueExcluded: '연체된 외상매출·외상매입을 모두 빼고 계산해 봅니다.',
-  demandOnly: '인플루언서 평가용 보기입니다. 반품 사유가 오배송·불량인 건의 환불액과 반품 물류비를 그 인플루언서 성과에서 뺍니다(오배송·불량은 인플루언서 책임이 아니라는 해석, 가정). 회사 손익과 현금은 바뀌지 않아요.',
   lc45: 'LC-0001 대금을 45일 뒤에 받는다고 가정합니다. 재무팀 공식 전망이 왜 다른지 설명할 때만 쓰는 점검용이에요(확인된 조건은 90일).',
 };
 const FIELD_KO: Record<string, string> = {

@@ -78,3 +78,13 @@ test('the post-approval features switch is off by default and validated', async 
   await svc.financeReturn('PLAN-001', 'finance', { reasons: ['cash_breach'], opinion: '확인' });
   expect((await svc.getCase('PLAN-001')).item.status).toBe('revision');
 });
+
+test('review: expired cases get no check label; the evaluation view never changes issues or routes', async () => {
+  const svc = await make();
+  const before = (await svc.listToday()).items.map((i) => [i.id, i.routeLevel, i.issues.join(';'), i.realRank]);
+  await svc.advanceClock('2026-07-18');
+  expect((await svc.listToday()).items.find((i) => i.id === 'PLAN-001')!.checkLabel).toBeNull();
+  const svc2 = await make();
+  expect((await svc2.listToday()).items.map((i) => [i.id, i.routeLevel, i.issues.join(';'), i.realRank])).toEqual(before);
+  expect((await svc2.getCase('PLAN-002')).check.evidence.realRoasDemandOnly).not.toBe((await svc2.getCase('PLAN-002')).check.evidence.realRoas);
+});

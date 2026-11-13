@@ -1,4 +1,4 @@
-import { DEFAULT_ASSUMPTIONS, SCENARIOS } from '../../src/engine/assumptions.js';
+import { DEFAULT_ASSUMPTIONS, DEMAND_ONLY_VIEW, SCENARIOS } from '../../src/engine/assumptions.js';
 import { loadDataRoom } from '../../src/engine/dataRoom.js';
 import { computeInfluencerPerformance, returnCauseSummary } from '../../src/engine/performance.js';
 
@@ -13,7 +13,7 @@ test('the default is "all": nothing changes', () => {
 });
 
 test('demand-only view: wrong-shipment and defect returns leave the influencer result', () => {
-  const p = byName(SCENARIOS.demandOnly);
+  const p = byName(DEMAND_ONLY_VIEW);
   expect(p.get('혜인')!.realRoas!).toBeCloseTo(-0.11, 1);
   expect(p.get('Ava Glow')!.realRoas!).toBeCloseTo(-0.13, 1);
   // 둘 다 여전히 손실
@@ -22,7 +22,7 @@ test('demand-only view: wrong-shipment and defect returns leave the influencer r
 });
 
 test('the three lowest keep their order', () => {
-  for (const a of [DEFAULT_ASSUMPTIONS, SCENARIOS.demandOnly]) {
+  for (const a of [DEFAULT_ASSUMPTIONS, DEMAND_ONLY_VIEW]) {
     const low = [...byName(a).values()].sort((x, y) => x.realRoas! - y.realRoas!).slice(0, 3).map((i) => i.name);
     expect(low).toEqual(['Ava Glow', '혜인', 'Lila SEA']);
   }
@@ -35,6 +35,7 @@ test('operational causes are 878 of 1,719 returns (about 51%)', () => {
 });
 
 test('the label says it is an assumption', () => {
-  expect(SCENARIOS.demandOnly.labels.returnAttribution).toBe('assumption');
+  expect(DEMAND_ONLY_VIEW.labels.returnAttribution).toBe('assumption');
+  expect(Object.keys(SCENARIOS)).not.toContain('demandOnly'); // 보기이지 가정 전환이 아니다
   expect(SCENARIOS.baseline.labels.returnAttribution).toBe('assumption');
 });

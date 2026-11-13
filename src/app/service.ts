@@ -61,7 +61,7 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ checkLabel: CheckLabel | null; /** 잠정 */ provisional: boolean; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 상신 전 점검 구간 라벨 */ checkLabel: CheckLabel | null; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -107,7 +107,7 @@ function adjustmentsFrom(events: EventRow[]): AdjustmentRecord[] {
 
 /** 상신 전 점검 라벨: 열린 확인 요청이나 빠진 정보가 있으면 확인 대기, 상신 전이고 막힘이 없으면 상신 준비 완료, 상신 이후는 상신함 */
 function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boolean): CheckLabel | null {
-  if (status === 'revision' || status === 'consulting') return null;
+  if (status === 'revision' || status === 'consulting' || status === 'overdue' || status === 'closed') return null;
   if (hasOpenRequest) return 'waiting_info';
   if (status === 'finance_review' || status === 'routed') return missingInfo ? 'waiting_info' : 'ready';
   return 'submitted';
