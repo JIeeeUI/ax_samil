@@ -35,8 +35,8 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 
-export function routeTone(level: string): 'red' | 'amber' | 'blue' | 'green' {
-  return level === 'CEO_BOARD' ? 'red' : level.startsWith('MASIL_CEO') ? 'amber' : 'green';
+export function routeTone(_level: string): 'gray' {
+  return 'gray'; // 결정자는 글자로만 구분한다(색은 주의·현금 부족 구간에만 쓴다)
 }
 
 export function Flash({ error }: { error?: string }) {

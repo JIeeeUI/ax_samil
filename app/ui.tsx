@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { href: '/', label: '할 일', icon: '✅' },
-  { href: '/requests', label: '확인 요청', icon: '💬' },
-  { href: '/settings', label: '설정', icon: '⚙️' },
+  { href: '/', label: '할 일' },
+  { href: '/requests', label: '확인 요청' },
+  { href: '/settings', label: '설정' },
 ];
 
-/** 화면 아래 고정 탭 바 */
+/** 글자만 있는 메뉴: PC는 왼쪽 좁은 열, 모바일은 아래 탭 */
 export function TabBar() {
   const path = usePathname();
   const active = (h: string) => (h === '/' ? path === '/' || path.startsWith('/cases') : path.startsWith(h));
@@ -17,7 +17,7 @@ export function TabBar() {
     <nav className="tabbar" aria-label="메뉴">
       {TABS.map((t) => (
         <Link key={t.href} href={t.href} className={active(t.href) ? 'on' : ''} aria-current={active(t.href) ? 'page' : undefined}>
-          <span aria-hidden>{t.icon}</span>{t.label}
+          {t.label}
         </Link>
       ))}
     </nav>
