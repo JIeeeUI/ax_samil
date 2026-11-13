@@ -84,6 +84,7 @@ export default async function CasePage({
           </form>
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
+      {d.cashComparison.needsFinanceCheck && <div className="flash flash-warn"><strong>재무 확인 필요(공식 현금 전망과 차이)</strong> {d.cashComparison.lines.join(' / ')}<br /><small>{d.cashComparison.unverified.join(' · ')}</small></div>}
       {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
       {d.notice && d.notice.status !== 'void' && (
         <section className="card-block">

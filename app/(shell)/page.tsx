@@ -48,6 +48,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
         </div>
       )}
+      {v.cashComparison.needsFinanceCheck && (
+        <div className="flash flash-warn">
+          <strong>재무 확인 필요</strong>: {v.cashComparison.lines.join(' / ')}
+          <br /><small>{v.cashComparison.unverified.join(' · ')}</small>
+        </div>
+      )}
       {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
       {v.openRequests > 0 && (
         <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 답변하기</span></div><span className="go" aria-hidden>›</span></Link>

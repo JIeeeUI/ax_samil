@@ -2,6 +2,7 @@ import { SCENARIOS, THRESHOLDS, type AssumptionSet, type ScenarioId } from '../e
 import { addDays, daysBetween, isIsoDate } from '../engine/calendar.js';
 import { buildCases, INF001_CONTRACT, planTotal, type Case } from '../engine/cases.js';
 import { simulateCash, type BreachWindow, type CashResult } from '../engine/cash.js';
+import { cashComparison, type CashComparison } from '../engine/cashGap.js';
 import { terminationPenalty } from '../engine/contract.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
@@ -53,6 +54,8 @@ export interface TodayItem {
 export interface TodayView {
   asOf: IsoDate; today: IsoDate; scenario: ScenarioId; assumptionVersion: string;
   breaches: BreachWindow[]; items: TodayItem[]; linkWarnings: LinkWarning[]; openRequests: number;
+  /** 재무 공식 전망과 재계산의 차이(재무 확인 필요 표시용) */
+  cashComparison: CashComparison;
 }
 export interface CaseDetail {
   item: TodayItem; row: IntakeRow; reasons: string[]; needsInfo: string[]; events: EventRow[];
@@ -62,6 +65,7 @@ export interface CaseDetail {
   review: ReviewView | null;
   /** 거절된 상태일 때 마지막 거절 사유 */
   rejection: Rejection | null;
+  cashComparison: CashComparison;
   revisions: RevisionRow[]; adjustments: AdjustmentRecord[];
   /** 자동 갱신 계약의 에이전시 통보 작업(결정이 난 뒤에만 있다) */
   notice: NoticeRow | null;
@@ -114,6 +118,8 @@ export class IntakeService {
   private repo: Repo;
   private room: DataRoom;
   constructor(deps: { repo: Repo; room: DataRoom }) { this.repo = deps.repo; this.room = deps.room; }
+
+  private adjustedRoom(adj: Adjustments | null): DataRoom { return applyAdjustments(this.room, adj ?? {}); }
 
   // ---------- 계산 ----------
   private async compute(): Promise<Computed> {
@@ -313,6 +319,7 @@ export class IntakeService {
       breaches: c.cash.breaches, items: this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage, await this.ownerMap()),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([k, v]) => [k, v.status]))),
       openRequests: (await this.repo.listInfoRequests({ status: 'requested' })).length,
+      cashComparison: cashComparison(this.adjustedRoom(await this.repo.getSetting<Adjustments>('adjustments')).full, c.a),
     };
   }
 
@@ -346,6 +353,7 @@ export class IntakeService {
       escalation: esc ? ESCALATION_OPTIONS : null, alerts,
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
+      cashComparison: cashComparison(this.room.full, c.a),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
       noticeWarning: k.kind === 'contract' && needsEscalation(item.status) && item.daysLeft <= 3 && item.daysLeft >= 0
