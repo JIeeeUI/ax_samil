@@ -44,6 +44,12 @@ test('1b) GEMINI_MODEL overrides the model; Gemini wins over Anthropic when both
   expect(createProvider({}, f)).toBeNull();
 });
 
+test('Gemini is only for the approver summary: other features can exclude it', () => {
+  const f = (async () => new Response('{}')) as unknown as typeof fetch;
+  expect(createProvider({ GEMINI_API_KEY: KEY }, f, ['anthropic'])).toBeNull();
+  expect(createProvider({ GEMINI_API_KEY: KEY, ANTHROPIC_API_KEY: 'a' }, f, ['anthropic'])!.name).toBe('anthropic');
+});
+
 test('2) no key: falls back to the template and reports no_key when AI was requested', async () => {
   const d = await detail();
   expect(createProvider({}, fetch)).toBeNull();

@@ -21,9 +21,11 @@ const isTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutErro
 export function createProvider(
   env: Record<string, string | undefined>,
   fetchImpl: typeof fetch = fetch,
+  /** 허용할 공급자. Gemini는 결재자용 요약의 "AI로 다시 쓰기"에만 쓰므로 다른 기능은 ['anthropic']만 넘긴다. */
+  allow: readonly ('gemini' | 'anthropic')[] = ['gemini', 'anthropic'],
 ): AiProvider | null {
-  if (env.GEMINI_API_KEY) return geminiProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, fetchImpl);
-  if (env.ANTHROPIC_API_KEY) return anthropicProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL ?? DEFAULT_MODEL, fetchImpl);
+  if (env.GEMINI_API_KEY && allow.includes('gemini')) return geminiProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, fetchImpl);
+  if (env.ANTHROPIC_API_KEY && allow.includes('anthropic')) return anthropicProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL ?? DEFAULT_MODEL, fetchImpl);
   return null;
 }
 

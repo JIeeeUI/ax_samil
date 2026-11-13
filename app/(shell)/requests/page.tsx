@@ -31,7 +31,7 @@ export default async function Requests({
   const all = (await Promise.all(v.items.map((i) => svc.getCase(i.id).then((d) => d.requests)))).flat().sort((a, b) => a.id - b.id);
   const open = all.filter((r) => r.status === 'requested');
   const done = all.filter((r) => r.status !== 'requested');
-  const ai = createProvider(process.env);
+  const ai = createProvider(process.env, fetch, ['anthropic']); // Gemini는 결재자용 요약에만 쓴다
   const extracted = req && text ? await structureReply(text, ai) : null;
   const draftReq = draft ? all.find((r) => String(r.id) === draft) : null;
   const draftOut = draftReq ? await draftInfoRequest(draftReq.needed, await svc.getCase(draftReq.caseId), ai) : null;
