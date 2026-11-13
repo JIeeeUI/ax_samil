@@ -4,9 +4,9 @@ import { loadDataRoom } from '../../src/engine/dataRoom.js';
 
 const room = loadDataRoom();
 
-test('eok formats in units of 100 million won with one decimal', () => {
-  expect(eok(5_468_884_369)).toBe('약 54.7억');
-  expect(eok(1_647_835_595)).toBe('약 16.5억');
+test('the approximate amount is shown in units of 10,000 won', () => {
+  expect(eok(5_468_884_369)).toBe('약 546,888만 원');
+  expect(eok(1_647_835_595)).toBe('약 164,784만 원');
 });
 
 test('official forecast and recalculation are shown side by side and flagged for finance', () => {

@@ -1,9 +1,10 @@
 import { THRESHOLDS, type AssumptionSet } from './assumptions.js';
 import { simulateCash, type BreachWindow } from './cash.js';
 import type { FullTables, IsoDate } from './types.js';
+import { approxMan } from '../format.js';
 
-/** 100,000,000 → "약 1.0억" (표시용) */
-export const eok = (n: number): string => `약 ${(Math.round((n / 100_000_000) * 10) / 10).toFixed(1)}억`;
+/** 표시용 근사 금액(만 원 단위) */
+export const eok = approxMan;
 
 export interface CashComparison {
   /** 재무 공식 전망(주간 예상 종가)의 최저값 */

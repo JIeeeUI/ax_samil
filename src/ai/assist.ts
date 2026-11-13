@@ -1,4 +1,5 @@
 import { THRESHOLDS } from '../engine/assumptions.js';
+import { formatMan } from '../format.js';
 import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import type { CaseDetail, ReplyValues } from '../app/service.js';
@@ -8,7 +9,7 @@ import { extractTokens, verifyFacts, type Facts } from './verify.js';
 
 export interface AssistResult { text: string; source: 'ai' | 'template'; note: string }
 
-const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+const won = formatMan;
 const NEEDED_LABEL: Record<string, string> = {
   cash_outflow_date: '고정 피 현금 유출일(지급 일정)',
   payment_schedule: '고정 피 지급 일정',
@@ -26,6 +27,8 @@ export function buildFacts(d: CaseDetail): Facts {
   const nums = [
     d.item.amount, d.item.daysLeft, d.item.nominalRank, d.item.realRank, d.row.과거명목ROAS, d.row.과거실질ROAS,
     d.row.반품률, d.row.채널기준반품률, d.row.요청비중, d.row.기존집행비중, d.row.기안예상GMV, d.row.기안예상명목ROAS,
+    // 화면·문구에는 만 원 단위로 반올림한 금액이 나오므로 같은 값도 사실로 인정한다.
+    Math.round(d.item.amount / 10_000) * 10_000, d.penalty === null ? null : Math.round(d.penalty / 10_000) * 10_000,
     d.penalty, THRESHOLDS.perItemKrw, THRESHOLDS.planTotalKrw, THRESHOLDS.contractAnnualKrw, THRESHOLDS.covenantMinKrw,
   ].filter((x): x is number => typeof x === 'number');
   const dates = [

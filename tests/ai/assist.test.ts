@@ -72,3 +72,13 @@ test('provider is null without a key and sends the expected request with one', a
   expect(h['anthropic-version']).toBe('2023-06-01');
   expect(JSON.parse(seen!.init.body as string).model).toBe('claude-sonnet-5-5');
 });
+
+test('amounts in the new 만 원 notation pass the number check, including rounded plan amounts', async () => {
+  for (const id of ['CONTRACT-INF-001', 'PLAN-001']) {
+    const d = await detail(id);
+    const tpl = (await summarizeForApproval(d, null)).text;
+    expect(tpl).toContain('만 원');
+    const r = await summarizeForApproval(d, fake(tpl));
+    expect(r.source).toBe('ai');
+  }
+});

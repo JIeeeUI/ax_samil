@@ -1,4 +1,5 @@
 import type { TodayItem } from '../src/app/service.js';
+import { formatMan } from '../src/format.js';
 import { decisionRole, ROLE_LABEL, type Role } from '../src/workflow/roles.js';
 import { TERMINAL } from '../src/workflow/status.js';
 
@@ -79,15 +80,8 @@ export const daysLeftText = (n: number) => (n < 0 ? `${-n}일 지남` : n === 0 
 /** 2026-07-17 → 7월 17일 */
 export const koDate = (d: string) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
 
-/** 2,800,000,000 → 28억 원, 18,962,703 → 1,896만 원 */
-export function shortWon(n: number): string {
-  if (n >= 100_000_000) {
-    const v = n / 100_000_000;
-    return `${Number.isInteger(v) ? v : v.toFixed(1)}억 원`;
-  }
-  if (n >= 10_000) return `${Math.round(n / 10_000).toLocaleString('ko-KR')}만 원`;
-  return `${n.toLocaleString('ko-KR')}원`;
-}
+/** 2,800,000,000 → 280,000만 원, 18,962,703 → 1,896만 원 (공용 표기 함수) */
+export const shortWon = formatMan;
 
 export const FLOW_STEPS = ['재무 확인', '상신', '결정', '완료'] as const;
 /** 진행 단계(0~3) */
