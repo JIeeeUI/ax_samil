@@ -72,12 +72,22 @@ export default async function Requests({
             {!can ? (
               <p className="meta">{ownerName}의 회신을 기다리는 중이에요. 지금 보는 사람({ROLE_LABEL[role]})은 답변을 입력할 수 없어요(담당 또는 결재자만 가능).</p>
             ) : isContractDate ? (
+              <>
+                <p className="sub">아래에서 고르면 바로 반영하고 다시 점검해요. 글자를 입력하지 않아도 돼요.</p>
+                <div className="actions quick">
+                  {preset('유리한 답변: 9월 30일에 지급', '2026-09-30', '유리한 회신(모의): 고정 비용은 2026-09-30에 지급합니다.')}
+                  {preset('불리한 답변: 8월 10일에 지급', '2026-08-10', '불리한 회신(모의): 고정 비용은 2026-08-10에 지급합니다.')}
+                  {preset('답변 지연: 일정 미정', null, '지연 회신(모의): 지급 일정은 아직 미정입니다.')}
+                </div>
+                <details className="fold"><summary>다른 날짜를 직접 입력</summary>
               <form action={actReply} className="hold">
                 <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" />
                 <label>돈이 나가는 날짜 <input type="date" name="cashOutflowDate" defaultValue={prefill.cashOutflowDate ?? ''} /></label>
                 <label>메모(선택) <input name="text" size={30} defaultValue={typed} placeholder="예: 8월 10일 지급 예정" /></label>
                 <button type="submit">답변 입력하고 다시 계산</button>
               </form>
+                </details>
+              </>
             ) : (
               <form action={actReply} className="hold">
                 <input type="hidden" name="requestId" value={q.id} /><input type="hidden" name="back" value="/requests" /><input type="hidden" name="resolved" value="1" />
@@ -93,12 +103,6 @@ export default async function Requests({
               )}
               {can && isContractDate && (
                 <>
-                  <p>미리 만들어 둔 답변으로 시연해 볼 수 있어요.</p>
-                  <div className="actions">
-                    {preset('유리한 답변: 9월 30일에 지급', '2026-09-30', '유리한 회신(모의): 고정 비용은 2026-09-30에 지급합니다.')}
-                    {preset('불리한 답변: 8월 10일에 지급', '2026-08-10', '불리한 회신(모의): 고정 비용은 2026-08-10에 지급합니다.')}
-                    {preset('답변 지연: 일정 미정', null, '지연 회신(모의): 지급 일정은 아직 미정입니다.')}
-                  </div>
                   <form method="get" action="/requests" className="inline">
                     <input type="hidden" name="req" value={q.id} />
                     <label>답변 글에서 날짜 뽑아 보기 <input name="text" size={40} defaultValue={typed} placeholder="예: 지급일은 2026-08-10입니다" /></label>

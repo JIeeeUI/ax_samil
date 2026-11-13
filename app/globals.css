@@ -191,3 +191,22 @@ a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible
 .facts li:has(ul.plain) .v { text-align: left; font-weight: 500; }
 ul.plain { text-align: left; }
 .facts ul.plain li { padding: 2px 0 2px 1.4em; text-indent: -1.4em; margin: 2px 0; }
+
+/* ---- UI 다듬기 (표현만) ---- */
+/* 한글은 단어 중간에서 끊지 않는다 */
+body { word-break: keep-all; overflow-wrap: break-word; }
+button { word-break: keep-all; line-height: 1.35; }
+
+/* 확인 체크박스: 작은 상자 + 글자를 한 줄로 */
+input[type='checkbox'] { width: 26px; height: 26px; min-height: 0; flex: none; padding: 0; accent-color: var(--primary); margin: 0; }
+label:has(> input[type='checkbox']) { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; background: var(--card); border-radius: 14px; color: var(--fg); font-size: 1rem; font-weight: 600; min-height: 52px; cursor: pointer; }
+
+/* 상신 전 점검: ①②③④가 이미 번호이므로 목록 번호를 없애고 줄 사이를 넓힌다 */
+ol.plain { list-style: none; margin: 8px 0 0; padding: 0; text-align: left; }
+ol.plain > li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+ol.plain > li:last-child { border-bottom: 0; }
+ol.plain .l1 { display: block; font-weight: 700; }
+ol.plain .more { display: block; margin-top: 4px; color: var(--muted); font-size: 0.93rem; }
+.actions.quick { flex-direction: column; }
+.actions.quick form, .actions.quick button { width: 100%; flex: none; }
+@media (min-width: 960px) { .actions.quick { flex-direction: row; } .actions.quick form { flex: 1 1 0; } }
