@@ -233,20 +233,22 @@ export default async function CasePage({
       </details>
 
       <details className="fold"><summary>결재자용 요약 문장 {summary.source === 'ai' ? '(AI 작성)' : '(자동 작성)'}</summary>
-        <p>{summary.text}</p>
-        {summary.note && <p className="meta">{summary.note}</p>}
-        <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link> <small>AI 키가 없으면 자동 작성 문장으로 대체돼요. AI는 승인·거절을 정하지 않아요.</small></p>
+        <div className="panel">
+          <p>{summary.text}</p>
+          {summary.note && <p className="meta">{summary.note}</p>}
+          <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link> <small>AI 키가 없으면 자동 작성 문장으로 대체돼요. AI는 승인·거절을 정하지 않아요.</small></p>
+        </div>
       </details>
 
       <details className="fold"><summary>처리 기록 {d.events.length}건</summary>
-        <table><thead><tr><th>날짜</th><th>누가</th><th>무엇을</th></tr></thead>
+        <div className="panel"><table><thead><tr><th>날짜</th><th>누가</th><th>무엇을</th></tr></thead>
           <tbody>{d.events.map((e) => (
             <tr key={e.id}>
               <td>{e.business_date}</td>
               <td>{e.actor_role === 'system' ? '시스템' : ROLE_LABEL[e.actor_role as keyof typeof ROLE_LABEL] ?? e.actor_role}{e.simulated && <Badge tone="blue">시연</Badge>}</td>
               <td>{ACTION_LABEL[e.action] ?? e.action}</td>
             </tr>
-          ))}</tbody></table>
+          ))}</tbody></table></div>
       </details>
 
       {i.kind === 'contract' && !['approved', 'closed', 'overdue'].includes(i.status) && canChangeContract(role) && (

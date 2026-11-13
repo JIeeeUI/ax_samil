@@ -272,3 +272,24 @@ details.fold .grid > div { background: var(--bg); }
 .badge-green { background: var(--green-bg); color: var(--green); }
 .badge-blue { background: var(--blue-bg); color: var(--blue); }
 .row-card:hover, .row-card:active { background: var(--mint-soft); }
+
+/* ---- 2차 다듬기 ---- */
+/* 1) 접힌 칸 안의 카드도 바깥 카드와 똑같이 보이게: 접힌 칸 자체는 투명, 제목줄만 카드 모양 */
+details.fold:has(.cardgrid) { background: transparent; box-shadow: none; border: 0; padding: 0; }
+details.fold:has(.cardgrid) > summary { background: var(--card); border-radius: 20px; padding: 16px 20px; box-shadow: var(--shadow); }
+details.fold:has(.cardgrid) .cardgrid { margin: 12px 0 4px; }
+details.fold:has(.cardgrid) .row-card { background: var(--card); box-shadow: var(--shadow); }
+details.fold:has(.cardgrid) .row-card:hover, details.fold:has(.cardgrid) .row-card:active { background: var(--mint-soft); }
+
+/* 2) 접힌 칸: 안쪽 내용도 계산 근거처럼 구역 칸으로, 초점 테두리는 칸 전체를 따라간다 */
+details.fold .panel { background: var(--bg); border-radius: 14px; padding: 14px 16px; margin: 6px 0 12px; }
+details.fold .panel > :first-child { margin-top: 0; }
+details.fold .panel > :last-child { margin-bottom: 0; }
+details.fold .panel form.hold { border: 0; padding: 0; margin: 0; }
+details.fold > summary:focus-visible { outline: none; }
+details.fold:has(> summary:focus-visible) { outline: 3px solid var(--forest); outline-offset: 2px; }
+
+/* 3) 입력칸과 버튼이 붙지 않게 간격을 둔다(초점 테두리가 버튼을 가리지 않도록) */
+.cta form { display: flex; flex-direction: column; gap: 12px; }
+form > input:not([type='hidden']) + button { margin-top: 12px; }
+.cta form > input:not([type='hidden']) + button { margin-top: 0; }
