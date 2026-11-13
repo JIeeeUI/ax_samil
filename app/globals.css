@@ -65,7 +65,7 @@ main { padding-top: 12px; padding-bottom: 88px; }
 .tl-axis { position: absolute; left: 0; right: 0; top: 40px; height: 1px; background: var(--ink); }
 /* 현금 부족 구간: 띠 안쪽을 연한 빨강으로 채운다 */
 .tl-band { position: absolute; top: 28px; height: 25px; background: var(--accent-soft); }
-.tl-label { position: absolute; top: 8px; font-size: 0.76rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
+.tl-label { position: absolute; top: 8px; text-align: center; overflow: hidden; font-size: 0.76rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
 .tl-tick { position: absolute; top: 40px; width: 0; height: 8px; border-left: 1px solid var(--muted); }
 .tl-tick i { position: absolute; top: 12px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tl-today { position: absolute; top: 20px; height: 28px; border-left: 1px dashed var(--muted); }
@@ -252,9 +252,10 @@ table.list tr.empty td { text-align: left; }
 .tag-high { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* 타임라인: 현금 부족 구간 시작·끝 표식 */
-.tl-edge { position: absolute; top: 26px; height: 29px; border-left: 2px solid var(--accent); }
-.tl-edge i { position: absolute; top: 46px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.72rem; font-weight: 700; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.tl-plot { height: 96px; }
+.tl-edge { position: absolute; top: 24px; height: 31px; border-left: 2px solid var(--accent); }
+.tl-edge i { position: absolute; top: -18px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.72rem; font-weight: 700; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tl-plot { height: 84px; }
+@media (max-width: 720px) { .tl-label { display: none; } }
 
 /* 건 상세: 주의할 점(중요도 상·중·하) */
 ul.attn { list-style: none; padding: 0; margin: 0; }
@@ -276,3 +277,4 @@ table.hist th small { display: block; font-weight: 400; }
 .facts li:has(ul.attn) .v { text-align: left; font-weight: 500; width: 100%; }
 .facts ul.attn > li { justify-content: flex-start; border-bottom: 0; padding: 5px 0; }
 .warn-ico { color: var(--accent); vertical-align: -3px; margin-right: 6px; flex: none; }
+table.list td.chk::before { font-weight: 400; }

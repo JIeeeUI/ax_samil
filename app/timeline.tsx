@@ -71,7 +71,7 @@ export function CashTimeline({
           <div key={b.start} className="tl-band" style={{ left: pos(b.start), width: `calc(${pos(b.end)} - ${pos(b.start)})` }} />
         ))}
         {breaches.map((b) => (
-          <span key={`l${b.start}`} className="tl-label" style={{ left: pos(b.start) }}>현금 부족 구간 {md(b.start)}–{md(b.end)}</span>
+          <span key={`l${b.start}`} className="tl-label" style={{ left: pos(b.start), width: `calc(${pos(b.end)} - ${pos(b.start)})` }}>현금 부족 구간 {md(b.start)}–{md(b.end)}</span>
         ))}
         {breaches.flatMap((b) => [
           <span key={`s${b.start}`} className="tl-edge" style={{ left: pos(b.start) }}><i>{md(b.start)} 시작</i></span>,
