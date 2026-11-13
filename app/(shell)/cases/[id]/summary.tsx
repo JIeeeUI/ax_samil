@@ -1,15 +1,15 @@
-import Link from 'next/link';
 import { summarizeForApproval } from '../../../../src/ai/assist.js';
 import { createProvider } from '../../../../src/ai/provider.js';
 import type { AiErrorCode } from '../../../../src/ai/provider.js';
 import type { CaseDetail } from '../../../../src/app/service.js';
 import { formal } from '../../../formal.js';
+import { AiRewriteLink } from './ai-link.js';
 
 const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).filter(Boolean);
 
 const ERROR_TEXT: Record<AiErrorCode, string> = {
   no_key: 'AI 키가 설정되지 않아 기본 문장을 보여 줍니다.',
-  timeout: 'AI 연결에 실패해 기본 문장을 보여 줍니다.',
+  timeout: 'AI 응답이 늦어 기본 문장을 보여 줍니다.',
   http_error: 'AI 연결에 실패해 기본 문장을 보여 줍니다.',
   verify_failed: 'AI 문장의 숫자가 맞지 않아 기본 문장을 보여 줍니다.',
 };
@@ -24,7 +24,7 @@ export async function ApproverSummary({ d, back, askAi }: { d: CaseDetail; back:
       <details className="fold" open={askAi}><summary>결재자용 요약 문장</summary>
         <div className="panel">
           <p className="aistate bad" role="status">요약을 불러오지 못했습니다. 잠시 뒤 다시 시도하십시오.</p>
-          <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link></p>
+          <AiRewriteLink href={`${back}?ai=1`} />
         </div>
       </details>
     );
@@ -43,7 +43,7 @@ export async function ApproverSummary({ d, back, askAi }: { d: CaseDetail; back:
         )}
         <ul className="lines">{sentences(formal(text)).map((s) => <li key={s}>{s}</li>)}</ul>
         {note && !error && <p className="meta">{formal(note)}</p>}
-        <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link></p>
+        <AiRewriteLink href={`${back}?ai=1`} />
       </div>
     </details>
   );
@@ -52,7 +52,7 @@ export async function ApproverSummary({ d, back, askAi }: { d: CaseDetail; back:
 export function SummaryLoading() {
   return (
     <details className="fold" open><summary>결재자용 요약 문장</summary>
-      <div className="panel"><p className="aistate" role="status" aria-live="polite">AI로 다시 쓰는 중…</p></div>
+      <div className="panel"><p className="aistate" role="status" aria-live="polite">AI가 쓰는 중입니다. 최대 30초 걸릴 수 있습니다.</p></div>
     </details>
   );
 }
