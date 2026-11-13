@@ -84,7 +84,7 @@ main { padding-top: 12px; padding-bottom: 88px; }
 /* 마우스를 올리거나 키보드로 이동하면 제안명·금액·결정 기한이 나타난다 */
 .tl-dot[data-tip]:hover::after, .tl-dot[data-tip]:focus-visible::after,
 .tl-group[data-tip]:hover::after, .tl-group[data-tip]:focus-visible::after {
-  content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
   width: max-content; max-width: 260px; white-space: pre-line; text-align: left; font-size: 0.78rem; font-weight: 500; line-height: 1.5;
   padding: 6px 10px; border-radius: var(--r1); background: var(--ink); color: var(--bg); pointer-events: none;
 }
