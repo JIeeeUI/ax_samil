@@ -10,6 +10,7 @@ import {
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { CashNote, CheckList } from '../../../check-ui.js';
+import { formal } from '../../../formal.js';
 import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
@@ -35,6 +36,11 @@ export default async function CasePage({
   const cfg = await svc.getConfig();
   const md = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
   const openReqs = d.requests.filter((q) => q.status === 'requested');
+  // 제목 끝의 괄호 설명은 제목에서 떼어 작은 참고 문구로 보여 준다
+  const noteMatch = step.text.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const stepMain = noteMatch ? noteMatch[1] : step.text;
+  const stepNote = noteMatch ? noteMatch[2] : '';
+  const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).filter(Boolean);
   return (
     <>
       <Flash error={error} />
@@ -43,19 +49,20 @@ export default async function CasePage({
         {FLOW_STEPS.map((s, n) => <li key={s} className={n < at ? 'done' : n === at ? 'now' : ''} aria-current={n === at ? 'step' : undefined}>{s}{n === at ? <span className="sr"> (현재 단계)</span> : null}</li>)}
       </ol>
 
-      <h1>{step.text}<small>{i.influencer} · {i.kind === 'contract' ? '연간 전속계약 갱신' : '캠페인 확대 요청'}</small></h1>
+      <h1>{stepMain}<small>{i.influencer} · {i.kind === 'contract' ? '연간 전속계약 갱신' : '캠페인 확대 요청'}</small></h1>
+      {stepNote && <p className="note">※ {stepNote}</p>}
 
       <div className="cols"><div className="col">
 
       <section className="card-block">
         <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : d.check.label === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
         <CheckList lines={d.check.lines} />
-        <p className="meta">점검은 계산·판정까지만 해요. 상신은 사람이 누르고, 되돌릴 수 없어요.</p>
+        <p className="meta">점검은 계산·판정까지만 합니다. 상신은 사람이 누르고, 되돌릴 수 없습니다.</p>
       </section>
       {step.kind === 'mine' && (
         <div className="cta">
           {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed || !(cfg.showExtended || d.revisions.length > 0) ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed && (cfg.showExtended || d.revisions.length > 0)} /><button type="submit">재무 확인 완료</button></form>}
-          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있어요(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 돼요.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
+          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있습니다(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 됩니다.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했습니다</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>
@@ -70,20 +77,20 @@ export default async function CasePage({
       {i.status === 'submitted' && role === decider && canSecond && (
         <details className="fold"><summary>정보가 더 필요하면 보류하기</summary>
           <form action={actDecide} className="hold">{hidden}<input type="hidden" name="decision" value="hold" />
-            <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
-            <label>누가 확인하나요? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
-            <label>언제까지 답을 받나요? <input type="date" name="holdDue" required /></label>
+            <label>무엇을 확인해야 합니까? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
+            <label>누가 확인합니까? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
+            <label>언제까지 답을 받습니까? <input type="date" name="holdDue" required /></label>
             <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
           </form>
         </details>
       )}
       {!cfg.showExtended && (i.status === 'revision' || i.status === 'consulting' || d.notice?.status === 'open' || d.notice?.status === 'sent') && (
-        <div className="flash flash-warn"><strong>확장 기능에서 처리 중</strong> 이 건은 결재 이후 기능(재무 반려·협의·통보 작업)에서 처리하고 있어요. 이어서 하려면 <Link href="/settings">설정</Link>에서 “확장 기능(결재 이후) 보기”를 켜세요. 확인 요청은 <Link href="/requests">확인 요청</Link>에서 그대로 답할 수 있어요.</div>
+        <div className="flash flash-warn"><strong>확장 기능에서 처리 중</strong> 이 건은 결재 이후 기능(재무 반려·협의·통보 작업)에서 처리하고 있습니다. 이어서 하려면 <Link href="/settings">설정</Link>에서 “확장 기능(결재 이후) 보기”를 켜십시오. 확인 요청은 <Link href="/requests">확인 요청</Link>에서 그대로 답할 수 있습니다.</div>
       )}
       {cfg.showExtended && i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
         <details className="fold"><summary>문제가 있으면 마케팅에 되돌리기(반려)</summary>
           <form action={actFinanceReturn} className="hold">{hidden}
-            <p className="meta">사유를 고르세요. 엔진 결과에 해당하는 칸은 미리 체크해 두었어요. 마케팅은 {koDate(d.returnState.dueIfReturnedToday)}까지 답해야 하고, 반려는 한 번만 할 수 있어요.</p>
+            <p className="meta">사유를 고르십시오. 엔진 결과에 해당하는 칸은 미리 체크해 두었습니다. 마케팅은 {koDate(d.returnState.dueIfReturnedToday)}까지 답해야 하고, 반려는 한 번만 할 수 있습니다.</p>
             {RETURN_REASONS.filter((k) => cfg.returnReasons[k]).map((k) => (
               <label key={k}><input type="checkbox" name="reasons" value={k} defaultChecked={d.returnHints.includes(k)} /> {RETURN_REASON_LABEL[k]}</label>
             ))}
@@ -104,7 +111,7 @@ export default async function CasePage({
           {d.notice.required && d.notice.status === 'open' && role === 'marketing' && (
             <form action={actSendNotice} className="hold">{hidden}<input type="hidden" name="kind" value={d.notice.kind} />
               <label>발송일 <input type="date" name="sentDate" required /></label>
-              <button type="submit">통보 발송했어요(모의)</button></form>
+              <button type="submit">통보 발송했습니다(모의)</button></form>
           )}
           {(d.notice.status === 'sent' || (!d.notice.required && d.notice.status === 'open')) && role === 'contract' && (
             <form action={actRecordNotice} className="hold">{hidden}
@@ -132,7 +139,7 @@ export default async function CasePage({
           ))}
           {i.status === 'revision' && role === 'marketing' && (
             <form action={actRevisionReply} className="hold">{hidden}
-              <label>어떻게 하시겠어요?
+              <label>어떻게 하시겠습니까?
                 <select name="kind" defaultValue={i.kind === 'plan' ? 'adjust' : 'keep'}>
                   {i.kind === 'plan' && <option value="adjust">조정함(집행일·요청액 바꾸기)</option>}
                   <option value="keep">변경 없음(재무 의견을 붙여 상신)</option>
@@ -147,21 +154,20 @@ export default async function CasePage({
         </section>
       )}
       {d.rejection && <div className="flash flash-warn"><strong>거절 사유</strong>: {d.rejection.reason} <small>({ROLE_LABEL[d.rejection.actor as keyof typeof ROLE_LABEL] ?? d.rejection.actor} · {koDate(d.rejection.date)})</small></div>}
-      {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
-      {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
+      {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산합니다.</p>}
 
       {d.review && (
         <section className="card-block">
-          <h2>결재 단계 <small>(1차 대표 검토 → 2차 CEO/이사회 결정 · 교육용 가정)</small></h2>
+          <h2>결재 단계 <small>(1차 대표 검토 → 2차 CEO/이사회 결정)</small></h2>
           <ol className="plain">
             <li><strong>1차 대표 검토</strong>: {{
-              pending: '검토 대기', held: `보류 중(담당 답변 기한 ${d.review.holdDue})`, escalated: '상신 완료 → 2차로 올렸어요',
-              returned: '반려(거절과 같아요, 다시 올릴 수 있어요)', closed_parallel: '병행 결정으로 닫힘(CEO가 먼저 결정했어요)',
+              pending: '검토 대기', held: `보류 중(담당 답변 기한 ${d.review.holdDue})`, escalated: '상신 완료 → 2차로 올렸습니다',
+              returned: '반려(거절과 같습니다, 다시 올릴 수 있습니다)', closed_parallel: '병행 결정으로 닫힘(CEO가 먼저 결정했습니다)',
             }[d.review.state]}{d.review.parallel && d.review.state !== 'closed_parallel' && <> <Badge tone="red">1차 미결</Badge></>}</li>
             <li><strong>2차 CEO/이사회 결정</strong>: {i.status === 'approved' ? '승인' : i.status === 'rejected' ? '거절' : d.review.parallel
-              ? `긴급이라 병행 상신했어요(${d.review.parallelDate}, 결정 기한 ${d.review.urgentDays}일 이내)` : d.review.state === 'escalated' ? '결정 요청됨' : '1차 상신 후 결정해요'}</li>
+              ? `긴급이라 병행 상신했습니다(${d.review.parallelDate}, 결정 기한 ${d.review.urgentDays}일 이내)` : d.review.state === 'escalated' ? '결정 요청됨' : '1차 상신 후 결정합니다'}</li>
           </ol>
-          <p className="meta">1차에서 보류해도 시계는 멈추지 않아요. 보류 기한은 {koDate(d.review.holdCapDate)}까지만 가능하고, 결정 기한 {d.review.urgentDays}일 전부터는 1차가 끝나지 않아도 CEO/이사회에 함께 올려요.</p>
+          <p className="meta">1차에서 보류해도 시계는 멈추지 않습니다. 보류 기한은 {koDate(d.review.holdCapDate)}까지만 가능하고, 결정 기한 {d.review.urgentDays}일 전부터는 1차가 끝나지 않아도 CEO/이사회에 함께 올려요.</p>
           {i.status === 'submitted' && role === 'masil_ceo' && (d.review.state === 'pending' || d.review.state === 'held') && (
             <>
               <div className="two">
@@ -171,16 +177,16 @@ export default async function CasePage({
               {d.review.state === 'pending' && (d.review.canHold ? (
                 <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>
                   <form action={actPrimary} className="hold">{hidden}<input type="hidden" name="op" value="hold" />
-                    <label>무엇을 확인해야 하나요? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
-                    <label>누가 확인하나요? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
-                    <label>언제까지 답을 받나요? (최대 {d.review.holdCapDate}) <input type="date" name="holdDue" max={d.review.holdCapDate} required /></label>
+                    <label>무엇을 확인해야 합니까? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
+                    <label>누가 확인합니까? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
+                    <label>언제까지 답을 받습니까? (최대 {d.review.holdCapDate}) <input type="date" name="holdDue" max={d.review.holdCapDate} required /></label>
                     <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
                   </form>
                 </details>
-              ) : <p className="meta">보류 상한일({d.review.holdCapDate})이 지나 1차 보류는 만들 수 없어요. 바로 CEO/이사회에 올리세요.</p>)}
+              ) : <p className="meta">보류 상한일({d.review.holdCapDate})이 지나 1차 보류는 만들 수 없습니다. 바로 CEO/이사회에 올리십시오.</p>)}
             </>
           )}
-          {i.status === 'submitted' && role === decider && !canSecond && <p>아직 1차 대표 검토 중이라 결정할 수 없어요. 긴급해지면 자동으로 함께 올라옵니다.</p>}
+          {i.status === 'submitted' && role === decider && !canSecond && <p>아직 1차 대표 검토 중이라 결정할 수 없습니다. 긴급해지면 자동으로 함께 올라옵니다.</p>}
         </section>
       )}
 
@@ -191,20 +197,20 @@ export default async function CasePage({
             {i.boardDate && <small>기한 전 이사회 {koDate(i.boardDate)}</small>}</span></li>
           <li><span className="k">결정 기한</span><span className="v">{koDate(i.effectiveDeadline)}<small>{daysLeftText(i.daysLeft)}</small></span></li>
           <li><span className="k">확인할 점</span>
-            <span className="v">{i.issues.length === 0 ? '없어요' : (
+            <span className="v">{i.issues.length === 0 ? '없습니다' : (
               <ul className="plain pts">{i.issues.map((c) => <li key={c}><span className={issuePlain(c).serious ? 'pt warn' : 'pt'} aria-hidden>{issuePlain(c).serious ? '⚠' : '•'}</span>{issuePlain(c).text}</li>)}</ul>
             )}</span></li>
         </ul>
-        {i.provisional && <p className="meta">잠정 판정이에요. 성과 피 조건이 확인되면 결정하는 사람이 바뀔 수 있어요.</p>}
-        {i.settlementDate !== '' && i.settlementDate < i.deadline && <p className="meta">계약 확정일은 {koDate(i.deadline)}이지만, 돈이 먼저 나가는 날({koDate(i.settlementDate)})이 있어 그 전에 결정해야 해요.</p>}
+        {i.provisional && <p className="meta">잠정 판정입니다. 성과 피 조건이 확인되면 결정하는 사람이 바뀔 수 있습니다.</p>}
+        {i.settlementDate !== '' && i.settlementDate < i.deadline && <p className="meta">계약 확정일은 {koDate(i.deadline)}이지만, 돈이 먼저 나가는 날({koDate(i.settlementDate)})이 있어 그 전에 결정해야 합니다.</p>}
       </section>
 
       {d.escalation && (
         <div className="flash flash-error">
-          <strong>기한이 코앞이에요.</strong> 결정 없이 {koDate(i.effectiveDeadline)}이 지나면 그대로 확정(또는 집행)돼요. 선택지: {d.escalation.map((o) => ESCALATION_LABEL[o]).join(' · ')}
+          <strong>기한이 코앞입니다.</strong> 결정 없이 {koDate(i.effectiveDeadline)}이 지나면 그대로 확정(또는 집행)됩니다. 선택지: {d.escalation.map((o) => ESCALATION_LABEL[o]).join(' · ')}
         </div>
       )}
-      {d.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
+      {d.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {formal(w.message)}</div>)}
       {openReqs.length > 0 && (
         <div className="flash flash-ok">
           <strong>답을 기다리는 확인 요청 {openReqs.length}건</strong>
@@ -217,27 +223,27 @@ export default async function CasePage({
         <div className="grid">
           <div><h3>과거 실제 성과</h3><dl>
             <dt>매출 대비 효과 (명목 ROAS)</dt><dd>{r.과거명목ROAS}</dd>
-            <dt>비용을 모두 뺀 효과 (실질 ROAS)</dt><dd>{r.과거실질ROAS} <small>0보다 작으면 광고비를 빼고 손해예요</small></dd>
+            <dt>비용을 모두 뺀 효과 (실질 ROAS)</dt><dd>{r.과거실질ROAS} <small>0보다 작으면 광고비를 빼고 손해입니다</small></dd>
             <dt>반품률 / 업계 기준</dt><dd>{pct(r.반품률)} / {pct(r.채널기준반품률)}</dd>
             <dt>성과 순위 (매출 기준 → 비용 반영)</dt><dd>{r.명목순위 || '-'} → {r.실질순위 || '-'}</dd></dl></div>
           <div><h3>예산 배분</h3><dl><dt>이번 요청 비중</dt><dd>{pct(r.요청비중)}</dd><dt>지금까지 집행 비중</dt><dd>{pct(r.기존집행비중)}</dd></dl></div>
           <div><h3>현금·승인</h3><dl>
             <dt>현금이 부족해질 기간</dt><dd>{r.하회구간}</dd>
-            <dt>돈이 나가는 날이 그 기간 안인가요</dt><dd>{r.하회구간해당}</dd>
-            <dt>판정 근거</dt><dd>{d.reasons.join(' / ')}</dd></dl></div>
+            <dt>돈이 나가는 날이 그 기간 안입니까</dt><dd>{r.하회구간해당}</dd>
+            <dt>판정 근거</dt><dd>{formal(d.reasons.join(' / '))}</dd></dl></div>
           <div><h3>같은 인플루언서의 다른 건</h3>
-            <p>{d.group.map((g) => <span key={g.id}><Link href={`/cases/${g.id}`}>{g.id}</Link> ({STATUS_PLAIN[g.status]}) </span>)}</p>
+            <ul className="linklist">{d.group.map((g) => <li key={g.id}><Link href={`/cases/${g.id}`}>{g.id}</Link><small>{STATUS_PLAIN[g.status]}</small></li>)}</ul>
             {d.penalty !== null && <p>갱신 직후 해지하면 위약금 <strong>{shortWon(d.penalty)}</strong> <small>(가정: 남은 고정 비용의 50%)</small></p>}
-            {d.notes.map((n) => <p key={n} className="meta">{n}</p>)}</div>
+            {d.notes.map((n) => <p key={n} className="meta">{formal(n)}</p>)}</div>
         </div>
-        {r.기안예상GMV !== '' && <p className="meta">요청서의 예상 매출 {won(r.기안예상GMV)}은 쿠폰·반품·광고비를 빼기 전 숫자라 이것만으로는 승인 근거가 되지 않아요.</p>}
+        {r.기안예상GMV !== '' && <p className="meta">요청서의 예상 매출 {won(r.기안예상GMV)}은 쿠폰·반품·광고비를 빼기 전 숫자라 이것만으로는 승인 근거가 되지 않습니다.</p>}
       </details>
 
       <details className="fold"><summary>결재자용 요약 문장 {summary.source === 'ai' ? '(AI 작성)' : '(자동 작성)'}</summary>
         <div className="panel">
-          <p>{summary.text}</p>
-          {summary.note && <p className="meta">{summary.note}</p>}
-          <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link> <small>AI 키가 없으면 자동 작성 문장으로 대체돼요. AI는 승인·거절을 정하지 않아요.</small></p>
+          <ul className="lines">{sentences(formal(summary.text)).map((s) => <li key={s}>{s}</li>)}</ul>
+          {summary.note && <p className="meta">{formal(summary.note)}</p>}
+          <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link></p>
         </div>
       </details>
 
@@ -258,7 +264,6 @@ export default async function CasePage({
             <label>1년 고정 비용(원) <input name="fee" inputMode="numeric" placeholder="1800000000" required /></label>
             <button type="submit" className="secondary">이 조건으로 다시 계산하기</button>
           </form>
-          <p className="meta">시연용 입력이에요. 금액에 따라 결정하는 사람이 바뀌는지 볼 수 있어요 (예: 18억 원, 9억 원).</p>
         </details>
       )}
       </div></div>

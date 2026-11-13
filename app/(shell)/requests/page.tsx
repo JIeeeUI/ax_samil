@@ -40,10 +40,6 @@ export default async function Requests({
     <>
       <Flash error={error} />
       <h1>확인 요청</h1>
-      <div className="flash flash-ok intro">
-        결재하는 사람이 “정보가 더 필요하다”며 보류하면 여기에 요청이 생겨요. 담당자가 답을 적으면 <strong>자동으로 다시 계산</strong>하고 다음 단계로 넘어갑니다.
-        <br /><small>지금 입력하는 답변은 모두 시연용(가상)으로 기록돼요.</small>
-      </div>
 
       {open.length === 0 && <p>답을 기다리는 요청이 없습니다. 건 상세에서 “보류”를 누르면 여기에 생겨요.</p>}
       {open.map((q) => {
@@ -65,15 +61,14 @@ export default async function Requests({
             <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} {q.caseId.startsWith('CONTRACT') ? '연간 계약' : '캠페인'}</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
             <p>
               답변 담당 <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong> · 기한 <strong>{q.dueDate}</strong>
-              {late && <> <Badge tone="red">기한이 지났어요</Badge></>}
+              {late && <> <Badge tone="red">기한이 지났습니다</Badge></>}
             </p>
             {q.replyText && <p className="meta">앞서 받은 답변(필요한 값이 없어 계속 기다리는 중): {q.replyText}</p>}
 
             {!can ? (
-              <p className="meta">{ownerName}의 회신을 기다리는 중이에요. 지금 보는 사람({ROLE_LABEL[role]})은 답변을 입력할 수 없어요(담당 또는 결재자만 가능).</p>
+              <p className="meta">{ownerName}의 회신을 기다리는 중입니다. 지금 보는 사람({ROLE_LABEL[role]})은 답변을 입력할 수 없습니다(담당 또는 결재자만 가능).</p>
             ) : isContractDate ? (
               <>
-                <p className="sub">아래에서 고르면 바로 반영하고 다시 점검해요. 글자를 입력하지 않아도 돼요.</p>
                 <div className="actions quick">
                   {preset('유리한 답변: 9월 30일에 지급', '2026-09-30', '유리한 회신(모의): 고정 비용은 2026-09-30에 지급합니다.')}
                   {preset('불리한 답변: 8월 10일에 지급', '2026-08-10', '불리한 회신(모의): 고정 비용은 2026-08-10에 지급합니다.')}
@@ -109,7 +104,7 @@ export default async function Requests({
                     <button type="submit" className="secondary">날짜 찾기</button>
                   </form>
                   {extracted && String(q.id) === req && (
-                    <p className="meta">찾은 값: {prefill.cashOutflowDate ?? '없음'} ({extracted.source === 'ai' ? 'AI' : '자동'}{extracted.note && `, ${extracted.note}`}) — 위 입력칸에 채워 두었으니 확인한 뒤 눌러 주세요.</p>
+                    <p className="meta">찾은 값: {prefill.cashOutflowDate ?? '없음'} ({extracted.source === 'ai' ? 'AI' : '자동'}{extracted.note && `, ${extracted.note}`}) — 위 입력칸에 채워 두었으니 확인한 뒤 눌러 주십시오.</p>
                   )}
                 </>
               )}

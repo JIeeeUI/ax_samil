@@ -48,7 +48,7 @@ export async function actFinanceReturn(fd: FormData) {
 /** 마케팅의 반려 회신: 조정 / 변경 없음 / 협의 필요 */
 export async function actRevisionReply(fd: FormData) {
   const kind = field(fd, 'kind');
-  if (kind !== 'adjust' && kind !== 'keep' && kind !== 'consult') return done(fd, { ok: false, error: 'INVALID_ADJUSTMENT: 회신 종류를 고르세요' });
+  if (kind !== 'adjust' && kind !== 'keep' && kind !== 'consult') return done(fd, { ok: false, error: 'INVALID_ADJUSTMENT: 회신 종류를 고르십시오' });
   const date = field(fd, 'settlementDate');
   const amount = num(field(fd, 'amount'));
   return done(fd, await (await cmd()).replyRevision(field(fd, 'id'), await currentRole(), {

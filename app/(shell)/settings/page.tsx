@@ -13,7 +13,7 @@ const SCENARIO_WHY: Record<string, string> = {
   arOverdueExcluded: '기준일 전에 이미 늦어진 외상매출은 못 받는다고 가정해 봅니다.',
   apOverdueExcluded: '기준일 전에 이미 늦어진 외상매입은 내지 않는다고 가정해 봅니다.',
   bothOverdueExcluded: '연체된 외상매출·외상매입을 모두 빼고 계산해 봅니다.',
-  lc45: 'LC-0001 대금을 45일 뒤에 받는다고 가정합니다. 재무팀 공식 전망이 왜 다른지 설명할 때만 쓰는 점검용이에요(확인된 조건은 90일).',
+  lc45: 'LC-0001 대금을 45일 뒤에 받는다고 가정합니다. 재무팀 공식 전망이 왜 다른지 설명할 때만 쓰는 점검용입니다(확인된 조건은 90일).',
 };
 const FIELD_KO: Record<string, string> = {
   returnAttribution: '반품을 인플루언서 성과에 반영하는 범위', unitsPerOrder: '주문 1건당 판매 수량', channelFeeBasis: '판매 채널 수수료 기준', recoverCostOnRefund: '환불되면 원가·수수료를 돌려받는지',
@@ -38,11 +38,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
     <>
       <Flash error={error} />
       <h1>시계·설정</h1>
-      <div className="flash flash-ok intro">시연하거나 점검할 때만 쓰는 화면이에요. 처음 쓰시는 분은 열어 보지 않아도 됩니다.</div>
 
       <section className="card-block">
         <h2>오늘 날짜 옮기기 <small>(지금: {clock.today})</small></h2>
-        <p>시연에서는 실제 날짜 대신 “가상의 오늘”을 씁니다. 날짜를 앞으로 옮기면 기한이 다가오는 건에 알림이 생기고, 기한이 지나면 <strong>자동 확정으로 기록</strong>돼요. 되돌릴 수는 없습니다.</p>
+        <p>시연에서는 실제 날짜 대신 “가상의 오늘”을 씁니다. 날짜를 앞으로 옮기면 기한이 다가오는 건에 알림이 생기고, 기한이 지나면 <strong>자동 확정으로 기록</strong>됩니다. 되돌릴 수는 없습니다.</p>
         <form action={actAdvanceClock} className="hold">{hidden}
           <label>이 날짜로 옮기기 <input type="date" name="date" defaultValue={clock.today} min={clock.today} required /></label>
           <button type="submit">날짜 옮기기</button>
@@ -58,7 +57,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       <section className="card-block">
         <h2>확장 기능(결재 이후) 보기</h2>
-        <p>이 도구의 중심은 상신 전 점검이에요. 결재 이후 기능(재무 반려·마케팅 회신·통보 작업·1차/2차 결재·알림 계획표)은 구현돼 있지만 기본으로 숨겨져 있어요. 켜면 화면에 나타납니다.</p>
+        <p>이 도구의 중심은 상신 전 점검입니다. 결재 이후 기능(재무 반려·마케팅 회신·통보 작업·1차/2차 결재·알림 계획표)은 구현돼 있지만 기본으로 숨겨져 있습니다. 켜면 화면에 나타납니다.</p>
         <form action={actSetConfig} className="hold">{hidden}
           <label>확장 기능 보기 <select name="showExtended" defaultValue={cfg.showExtended ? 'on' : 'off'}><option value="off">끄기(기본)</option><option value="on">켜기</option></select></label>
           <button type="submit">저장</button>
@@ -68,7 +67,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       {cfg.showExtended && (<>
       <section className="card-block">
         <h2>결재·알림 설정 <Badge tone="amber">가정</Badge></h2>
-        <p>교육용으로 정한 값이에요. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>이에요.</p>
+        <p>교육용으로 정한 값입니다. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>입니다.</p>
         <form action={actSetConfig} className="hold">{hidden}
           <label>1차/2차 결재 <select name="twoStage" defaultValue={cfg.twoStage ? 'on' : 'off'}><option value="off">끄기(기본, 1단계)</option><option value="on">켜기(대표 검토 → CEO 결정)</option></select></label>
           <label>긴급 기준(결정 기한 며칠 전부터) <input type="number" name="urgentDays" min={1} max={60} defaultValue={cfg.urgentDays} /></label>
@@ -92,7 +91,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
 
       <section className="card-block">
         <h2>재무 반려 사유·역산 일정 <Badge tone="amber">가정</Badge></h2>
-        <p>재무팀이 마케팅에 되돌릴 때(반려) 고를 수 있는 사유예요. 끄면 선택지에서 사라집니다.</p>
+        <p>재무팀이 마케팅에 되돌릴 때(반려) 고를 수 있는 사유입니다. 끄면 선택지에서 사라집니다.</p>
         <form action={actSetReturnReasons} className="hold">{hidden}
           {RETURN_REASONS.map((k) => <label key={k}><input type="checkbox" name={`rr_${k}`} defaultChecked={cfg.returnReasons[k]} /> {RETURN_REASON_LABEL[k]}</label>)}
           <button type="submit">반려 사유 저장</button>
@@ -106,12 +105,12 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <li>결정 기한까지 5일 이하이면 반려하지 않고 재무 의견을 붙여 바로 상신 · 반려는 건당 한 번(왕복 1회)</li>
           <li>회신 기한까지 답이 없으면 “미응답”으로 표시하고 재무 의견을 붙여 결재자에게 자동 전달(결정이 아니라 전달)</li>
         </ul>
-        <p className="meta">기존 값(알림 D-14/7/3, 긴급 10일, 확인 요청 +3일)은 그대로예요.</p>
+        <p className="meta">기존 값(알림 D-14/7/3, 긴급 10일, 확인 요청 +3일)은 그대로입니다.</p>
       </section>
       </>)}
 
       <h2>가정을 바꿔 보기</h2>
-      <p>현금 계산에는 자료에 없어서 정한 가정이 들어 있어요. 가정을 바꾸면 현금이 부족해지는 기간이 달라지고, 그에 따라 <strong>누가 승인해야 하는지</strong>도 달라질 수 있습니다. 아직 끝나지 않은 건만 다시 계산돼요.</p>
+      <p>현금 계산에는 자료에 없어서 정한 가정이 들어 있습니다. 가정을 바꾸면 현금이 부족해지는 기간이 달라지고, 그에 따라 <strong>누가 승인해야 하는지</strong>도 달라질 수 있습니다. 아직 끝나지 않은 건만 다시 계산됩니다.</p>
       <div className="scenarios">
         {(Object.keys(SCENARIOS) as (keyof typeof SCENARIOS)[]).map((id) => (
           <form key={id} action={actSetScenario} className={`scn${id === scenario ? ' on' : ''}`}>{hidden}

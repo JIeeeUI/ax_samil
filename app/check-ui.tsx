@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formal } from './formal.js';
 
 /** ① 승인 ② 기한 ③ 근거 ④ 빠진 정보 — 점검 네 줄의 이름표 */
 const KEYS = ['승인', '기한', '근거', '빠진 정보'];
@@ -15,7 +16,7 @@ export function CheckList({ lines }: { lines: string[] }) {
   return (
     <ol className="checklist">
       {lines.map((raw, n) => {
-        const { head, rest } = split(raw.replace(/^[①②③④]\s*/, ''));
+        const { head, rest } = split(formal(raw).replace(/^[①②③④]\s*/, ''));
         const last = n === 3; // ④(빠진 정보)의 안내 문장은 접지 않고 보여 준다
         return (
           <li key={raw}>
@@ -39,19 +40,19 @@ export function CheckList({ lines }: { lines: string[] }) {
 
 /** 공식 현금 전망과 재계산이 다를 때: 핵심 두 줄만 보이고 이유는 접는다. */
 export function CashNote({ lines, unverified }: { lines: string[]; unverified: string[] }): ReactNode {
-  const [official, recalc, ...why] = lines;
+  const [official, recalc, ...why] = lines.map(formal);
   return (
     <div className="flash flash-warn cashnote">
-      <strong>재무 확인 필요</strong> <small>공식 현금 전망과 계산 결과가 달라요</small>
+      <strong>재무 확인 필요</strong> <small>공식 현금 전망과 계산 결과가 다릅니다</small>
       <ul className="short">
         {official && <li>{official}</li>}
         {recalc && <li>{recalc}</li>}
       </ul>
       {(why.length > 0 || unverified.length > 0) && (
         <details className="more">
-          <summary>왜 다른가요?</summary>
+          <summary>차이 사유</summary>
           {why.map((w) => <p key={w}>{w}</p>)}
-          {unverified.length > 0 && <p className="meta">{unverified.join(' · ')}</p>}
+          {unverified.length > 0 && <p className="meta">{formal(unverified.join(' · '))}</p>}
         </details>
       )}
     </div>

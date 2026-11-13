@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formal } from './formal.js';
 import type { ScenarioId } from '../src/engine/assumptions.js';
 import type { Status } from '../src/workflow/status.js';
 
@@ -39,7 +40,7 @@ export function routeTone(level: string): 'red' | 'amber' | 'blue' | 'green' {
 }
 
 export function Flash({ error }: { error?: string }) {
-  return error ? <div role="alert" className="flash flash-error">오류: {error}</div> : null;
+  return error ? <div role="alert" className="flash flash-error">오류: {formal(error)}</div> : null;
 }
 
 export function stageTone(stage: string): 'red' | 'amber' | 'blue' | 'gray' {

@@ -4,6 +4,7 @@ import type { TodayItem } from '../../src/app/service.js';
 import { ROLE_LABEL } from '../../src/workflow/roles.js';
 import { Badge, Flash, routeTone } from '../components.js';
 import { CashNote } from '../check-ui.js';
+import { formal } from '../formal.js';
 import { CHECK_LABEL, WHO_DECIDES, WHO_SHORT, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
 import { currentRole } from '../session.js';
 
@@ -44,9 +45,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     const needInfo = v.items.filter((i) => i.checkLabel === 'waiting_info'); // 빠진 정보 → 마케팅이 확인
     const financeWait = v.items.filter((i) => i.checkLabel === 'finance_pending'); // 점검 통과 → 재무 확인을 기다림
     const sent = v.items.filter((i) => i.checkLabel === 'submitted');
-    const title = ready.length > 0 ? '지금 상신할 수 있는 건 ' + ready.length + '건'
-      : needInfo.length > 0 ? '정보 확인이 필요한 건 ' + needInfo.length + '건'
-      : financeWait.length > 0 ? '재무팀 확인을 기다리는 건 ' + financeWait.length + '건' : '점검할 건이 없어요';
+    const title = ready.length > 0 ? '상신 준비 완료 ' + ready.length + '건'
+      : needInfo.length > 0 ? '정보 확인 필요 ' + needInfo.length + '건'
+      : financeWait.length > 0 ? '재무 확인 대기 ' + financeWait.length + '건' : '점검할 건이 없습니다';
     const Group = ({ items, hint, tone }: { items: TodayItem[]; hint: string; tone: boolean }) => (
       <>
         <div className="cardgrid">{items.slice(0, SHOW_FIRST).map((i) => <CaseRow key={i.id} i={i} mine={tone} hint={hint} />)}</div>
@@ -60,26 +61,20 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <>
         <Flash error={error} />
         <h1>{title}<small>상신 전 점검 · {ROLE_LABEL[role]}</small></h1>
-        <p className="sub">카드를 열면 ① 누가 승인하나 ② 언제까지인가 ③ 근거 ④ 빠진 정보를 한눈에 볼 수 있어요. 점검은 계산·판정까지만 하고, 상신은 사람이 눌러요.</p>
-        <ul className="legend">
-          <li><Badge tone="green">상신 준비 완료</Badge> 재무 확인까지 끝나서 지금 상신할 수 있어요</li>
-          <li><Badge tone="blue">재무 확인 대기</Badge> 점검은 통과했어요. 재무팀이 확인할 때까지 기다리면 돼요</li>
-          <li><Badge tone="amber">확인 대기</Badge> 빠진 정보가 있어요. 물어볼 곳에 확인해 주세요</li>
-        </ul>
         {v.breaches.length > 0 && (
           <div className="flash flash-warn">
-            <strong>{v.breaches.map((b) => koDate(b.start) + ' ~ ' + koDate(b.end)).join(', ')}</strong>에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
+            <strong>{v.breaches.map((b) => koDate(b.start) + ' ~ ' + koDate(b.end)).join(', ')}</strong>에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정합니다.
           </div>
         )}
-        {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
+        {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {formal(w.message)}</div>)}
         {v.openRequests > 0 && (
           <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 보기</span></div><span className="go" aria-hidden>›</span></Link>
         )}
 
-        {ready.length > 0 && (<><h2>지금 상신하세요 <small>{ready.length}건</small></h2><Group items={ready} hint="지금 상신할 수 있어요" tone /></>)}
-        {needInfo.length > 0 && (<><h2>정보를 확인해 주세요 <small>{needInfo.length}건</small></h2><Group items={needInfo} hint="빠진 정보가 있어요. 카드를 열어 물어볼 곳을 확인하세요" tone /></>)}
-        {financeWait.length > 0 && (<><h2>재무팀 확인을 기다려요 <small>{financeWait.length}건 · 마케팅은 기다리면 돼요</small></h2><Group items={financeWait} hint="점검 통과 · 재무팀 확인 후 상신할 수 있어요" tone={false} /></>)}
-        {ready.length + needInfo.length + financeWait.length === 0 && <p className="meta">지금 점검할 건이 없어요.</p>}
+        {ready.length > 0 && (<><h2>상신 준비 완료 <small>{ready.length}건</small></h2><Group items={ready} hint="지금 상신할 수 있습니다" tone /></>)}
+        {needInfo.length > 0 && (<><h2>정보 확인 필요 <small>{needInfo.length}건</small></h2><Group items={needInfo} hint="빠진 정보가 있습니다. 확인할 부서를 카드에서 확인하십시오" tone /></>)}
+        {financeWait.length > 0 && (<><h2>재무 확인 대기 <small>{financeWait.length}건</small></h2><Group items={financeWait} hint="점검 통과 · 재무팀 확인 후 상신할 수 있습니다" tone={false} /></>)}
+        {ready.length + needInfo.length + financeWait.length === 0 && <p className="meta">지금 점검할 건이 없습니다.</p>}
         {sent.length > 0 && (
           <details className="fold"><summary>이미 상신한 건 {sent.length}건</summary>
             <div className="cardgrid">{sent.map((i) => <CaseRow key={i.id} i={i} mine={false} hint={nextStep(i, role).text} />)}</div></details>
@@ -96,17 +91,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   return (
     <>
       <Flash error={error} />
-      <h1>{mine.length > 0 ? `${mine.length}건을 처리해 주세요` : '지금 할 일이 없어요'}<small>{ROLE_LABEL[role]}으로 보고 있어요</small></h1>
-      <p className="sub">{mine.length > 0 ? '카드를 눌러 위에서부터 하나씩 처리하면 돼요. 계산은 이미 끝나 있어요.' : '위에서 보는 사람을 바꾸거나, 아래에서 진행 중인 건을 확인해 보세요.'}</p>
+      <h1>{mine.length > 0 ? `처리할 건 ${mine.length}건` : '처리할 건이 없습니다'}<small>{ROLE_LABEL[role]}</small></h1>
 
       {v.breaches.length > 0 && (
         <div className="flash flash-warn">
-          <strong>{v.breaches.map((b) => `${koDate(b.start)} ~ ${koDate(b.end)}`).join(', ')}</strong>에는 회사 현금이 부족해질 수 있어요.
-          이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
+          <strong>{v.breaches.map((b) => `${koDate(b.start)} ~ ${koDate(b.end)}`).join(', ')}</strong>에는 회사 현금이 부족해질 수 있습니다.
+          이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정합니다.
         </div>
       )}
       {v.cashComparison.needsFinanceCheck && <CashNote lines={v.cashComparison.lines} unverified={v.cashComparison.unverified} />}
-      {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
+      {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {formal(w.message)}</div>)}
       {v.openRequests > 0 && (
         <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 답변하기</span></div><span className="go" aria-hidden>›</span></Link>
       )}

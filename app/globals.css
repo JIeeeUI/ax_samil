@@ -336,3 +336,28 @@ section.summary .facts { background: var(--bg); border-radius: 14px; padding: 4p
 .row-card:hover .rc-panel, .row-card:active .rc-panel { background: var(--card); }
 .facts ul.plain.pts li { justify-content: flex-start; border: 0; text-align: left; font-weight: 500; }
 .facts ul.plain.pts .pt { margin-top: 0; }
+
+/* ---- 업무용 다듬기 ---- */
+/* 입력칸은 흰색(어두운 화면에서는 한 단계 밝은 칸) */
+:root { --input-bg: #ffffff; --input-line: #d3d1c6; }
+@media (prefers-color-scheme: dark) { :root { --input-bg: #232d2a; --input-line: #3a4742; } }
+input:not([type='checkbox']):not([type='hidden']), select, textarea { background: var(--input-bg); border: 1px solid var(--input-line); }
+
+/* 눌러서 펼치는 '자세히'·'차이 사유': 버튼처럼 보이게 경계와 화살표를 둔다 */
+details.more > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px solid var(--mint); border-radius: 999px; background: var(--card); color: var(--forest-text); font-size: 0.85rem; font-weight: 600; cursor: pointer; list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: '▾'; font-size: 0.8em; }
+details.more[open] > summary::after { content: '▴'; }
+details.more > summary:hover, details.more[open] > summary { background: var(--mint-soft); }
+details.more > summary:focus-visible { outline: 3px solid var(--forest); outline-offset: 2px; }
+.cashnote details.more > summary { color: var(--amber); border-color: var(--amber); background: transparent; }
+details.more > p { margin: 8px 0 0; }
+
+/* 제목 아래 참고 문구: 작지만 읽을 수 있게 */
+.note { margin: 2px 0 14px; color: var(--muted); font-size: 0.88rem; }
+
+/* 같은 인플루언서의 건·요약 문장: 한 줄에 하나씩 */
+ul.linklist, ul.lines { list-style: none; margin: 0; padding: 0; }
+ul.linklist li, ul.lines li { padding: 8px 0; border-bottom: 1px solid var(--line); line-height: 1.6; }
+ul.linklist li:last-child, ul.lines li:last-child { border-bottom: 0; }
+ul.linklist li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
