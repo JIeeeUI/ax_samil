@@ -76,6 +76,9 @@ export default async function CasePage({
           </form>
         </details>
       )}
+      {!cfg.showExtended && (i.status === 'revision' || i.status === 'consulting' || d.notice?.status === 'open' || d.notice?.status === 'sent') && (
+        <div className="flash flash-warn"><strong>확장 기능에서 처리 중</strong> 이 건은 결재 이후 기능(재무 반려·협의·통보 작업)에서 처리하고 있어요. 이어서 하려면 <Link href="/settings">설정</Link>에서 “확장 기능(결재 이후) 보기”를 켜세요. 확인 요청은 <Link href="/requests">확인 요청</Link>에서 그대로 답할 수 있어요.</div>
+      )}
       {cfg.showExtended && i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
         <details className="fold"><summary>문제가 있으면 마케팅에 되돌리기(반려)</summary>
           <form action={actFinanceReturn} className="hold">{hidden}
