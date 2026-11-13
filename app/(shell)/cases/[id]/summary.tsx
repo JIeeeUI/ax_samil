@@ -29,12 +29,18 @@ export async function ApproverSummary({ d, back, askAi }: { d: CaseDetail; back:
       </details>
     );
   }
-  const { text, source, note, error } = result;
+  const { text, source, note, error, status } = result;
+  const busy = error === 'http_error' && (status === 503 || status === 429);
   return (
     <details className="fold" open={askAi}><summary>결재자용 요약 문장 {source === 'ai' ? '(AI 작성)' : '(자동 작성)'}</summary>
       <div className="panel">
         {source === 'ai' && <p className="aistate muted" role="status">AI 작성</p>}
-        {source === 'fallback' && error && <p className="aistate bad" role="status">{ERROR_TEXT[error] ?? ERROR_TEXT.http_error}</p>}
+        {source === 'fallback' && error && (
+          <p className="aistate bad" role="status">
+            {busy ? '구글 서버가 바쁩니다. 잠시 뒤 다시 눌러 주세요.' : (ERROR_TEXT[error] ?? ERROR_TEXT.http_error)}
+            {error === 'http_error' && status !== undefined && <small> (상태 {status})</small>}
+          </p>
+        )}
         <ul className="lines">{sentences(formal(text)).map((s) => <li key={s}>{s}</li>)}</ul>
         {note && !error && <p className="meta">{formal(note)}</p>}
         <p><Link href={`${back}?ai=1`}>AI로 다시 쓰기</Link></p>
