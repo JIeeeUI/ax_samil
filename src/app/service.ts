@@ -3,6 +3,8 @@ import { addDays, daysBetween, isIsoDate } from '../engine/calendar.js';
 import { buildCases, INF001_CONTRACT, planTotal, type Case } from '../engine/cases.js';
 import { simulateCash, type BreachWindow, type CashResult } from '../engine/cash.js';
 import { cashComparison, type CashComparison } from '../engine/cashGap.js';
+import { historyEntry, type HistoryEntry } from './history.js';
+import { buildAttention, type Attention } from '../workflow/attention.js';
 import { terminationPenalty } from '../engine/contract.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
@@ -61,7 +63,8 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 상신 전 점검 구간 라벨 */ checkLabel: CheckLabel | null; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 상신 전 점검 구간 라벨 */ checkLabel: CheckLabel | null;
+  /** 주의 항목(등급·통합 규칙 적용): 개수, 가장 중요한 태그 1개, 정렬된 목록 */ attention: Attention; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
@@ -80,6 +83,8 @@ export interface CaseDetail {
   rejection: Rejection | null;
   cashComparison: CashComparison;
   check: CheckResult;
+  /** 처리 기록(화면용): 실제 시각, 보낸 사람, 받는 부서(담당자) */
+  history: HistoryEntry[];
   revisions: RevisionRow[]; adjustments: AdjustmentRecord[];
   /** 자동 갱신 계약의 에이전시 통보 작업(결정이 난 뒤에만 있다) */
   notice: NoticeRow | null;
@@ -112,6 +117,12 @@ function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boo
   if (status === 'finance_review') return missingInfo ? 'waiting_info' : 'finance_pending'; // 점검 통과, 재무 확인 대기
   if (status === 'routed') return missingInfo ? 'waiting_info' : 'ready'; // 재무 확인이 끝나 상신할 수 있음
   return 'submitted';
+}
+
+/** 결정 전 기한 임박(3일 이내) 계약의 자동 갱신 경고 문구 */
+function autoRenewText(kind: string, status: Status, daysLeft: number, effectiveDeadline: IsoDate): string | null {
+  return kind === 'contract' && needsEscalation(status) && daysLeft <= 3 && daysLeft >= 0
+    ? `통보 미완료 시 자동 갱신: 결정 기한 ${effectiveDeadline}까지 결정하고 통보하지 않으면 현재 조건으로 자동 갱신됩니다.` : null;
 }
 
 function requireReason(reason: string | undefined): void {
@@ -294,9 +305,17 @@ export class IntakeService {
     owners: Map<string, Role[]>,
   ): TodayItem[] {
     const byId = new Map(c.intake.map((r) => [r.제안ID, r]));
+    // 같은 인플루언서의 기안만 부결·계약 미결정 경고는 계약 건의 주의 항목으로 묶는다.
+    const linkByCase = new Map<string, string>();
+    for (const w of linkWarnings(c.cases, new Map([...statuses].map(([id, v]) => [id, v.status])))) {
+      const contract = c.cases.find((x) => x.kind === 'contract' && x.linkGroup === w.influencerId);
+      if (contract) linkByCase.set(contract.id, w.message);
+    }
     return c.cases.map((k) => {
       const row = byId.get(k.id)!;
       const st = statuses.get(k.id)!;
+      const provisional = !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms');
+      const issues = row.이슈 === '' ? [] : row.이슈.split(';');
       return {
         id: k.id, kind: k.kind, influencerId: k.influencerId, influencer: row.인플루언서, campaign: row.캠페인,
         amount: k.amount, scale: row.금액규모, deadline: k.deadline, settlementDate: row.집행예정일,
@@ -308,8 +327,14 @@ export class IntakeService {
           return (!rv || rv.state === 'pending' || rv.state === 'held') && !(rv?.parallel);
         })(),
         checkLabel: checkLabelFor(st.status, (owners.get(k.id) ?? []).length > 0, c.routes.get(k.id)!.needsInfo.length > 0),
-        provisional: !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms'), inBreach: row.하회구간해당,
-        issues: row.이슈 === '' ? [] : row.이슈.split(';'), nominalRank: row.명목순위, realRank: row.실질순위,
+        provisional, inBreach: row.하회구간해당,
+        attention: TERMINAL.has(st.status)
+          ? buildAttention({ issues: [], inBreach: '아니오', provisional: false, effectiveDeadline: k.effectiveDeadline })
+          : buildAttention({
+            issues, inBreach: row.하회구간해당, provisional, linkWarning: linkByCase.get(k.id) ?? null,
+            autoRenewWarning: autoRenewText(k.kind, st.status, row.남은일수, k.effectiveDeadline), effectiveDeadline: k.effectiveDeadline,
+          }),
+        issues, nominalRank: row.명목순위, realRank: row.실질순위,
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
       };
     }).sort((x, y) => x.effectiveDeadline.localeCompare(y.effectiveDeadline) || x.id.localeCompare(y.id));
@@ -378,11 +403,11 @@ export class IntakeService {
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
       cashComparison: cashComparison(this.room.full, c.a),
+      history: events.map(historyEntry),
       check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
-      noticeWarning: k.kind === 'contract' && needsEscalation(item.status) && item.daysLeft <= 3 && item.daysLeft >= 0
-        ? `통보 미완료 시 자동 갱신: 결정 기한 ${item.effectiveDeadline}까지 결정하고 통보하지 않으면 현재 조건으로 자동 갱신됩니다.` : null,
+      noticeWarning: autoRenewText(k.kind, item.status, item.daysLeft, item.effectiveDeadline),
       adjustments: adjustmentsFrom(events),
       returnHints: this.hints(item, c.intake.find((r) => r.제안ID === id)!, await this.getConfig()),
       returnState: await this.returnState(c, id, item.effectiveDeadline),

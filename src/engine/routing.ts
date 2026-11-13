@@ -1,6 +1,7 @@
 import { THRESHOLDS } from './assumptions.js';
 import { breachWindowFor, type BreachWindow } from './cash.js';
 import type { Case } from './cases.js';
+import { formatMan } from '../format.js';
 
 export type RouteLevel = 'CEO_BOARD' | 'MASIL_CEO_GROUP_REPORT' | 'MASIL_CEO' | 'MARKETING';
 
@@ -17,7 +18,7 @@ export const ROUTE_LABEL: Record<RouteLevel, string> = {
   MARKETING: '마케팅 전결',
 };
 
-const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+const won = formatMan; // 표기만 공용 함수를 쓴다(금액 비교는 그대로)
 
 /**
  * 승인 경로 (approval_authority_policy, covenant_terms_ms). 위에서부터 적용, 먼저 걸리는 쪽 우선.

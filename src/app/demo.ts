@@ -1,4 +1,5 @@
 import type { IsoDate } from '../engine/types.js';
+import { formatMan } from '../format.js';
 import type { Role } from '../workflow/roles.js';
 import { CONTRACT_ID, type IntakeService, type ReplyValues } from './service.js';
 
@@ -50,7 +51,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
     await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 1_800_000_000 });
     const d18 = await svc.getCase(CONTRACT_ID);
     facts.fee18 = { route: d18.item.routeLevel, penaltyAtRenewal: d18.penalty };
-    say(`고정 피 연 18억 원: 경로 ${d18.item.routeLevel}, 갱신 직후 해지 위약금 ${d18.penalty}원`);
+    say(`고정 피 연 18억 원: 경로 ${d18.item.routeLevel}, 갱신 직후 해지 위약금 ${formatMan(d18.penalty!)}`);
 
     await svc.reset();
     await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
@@ -142,7 +143,7 @@ export async function runScenario(svc: IntakeService, name: ScenarioName): Promi
   return { scenario: name, lines, facts };
 }
 
-const WON_EOK = (n: number) => `${(Math.round((n / 100_000_000) * 100) / 100).toFixed(2)}억 원`;
+const WON_EOK = formatMan;
 
 /**
  * 상신 전 점검 시연(기준일 7/1, 시계는 움직이지 않는다). 점검은 계산·판정·초안까지이고 상신·승인은 사람이 한다.

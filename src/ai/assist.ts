@@ -1,14 +1,20 @@
 import { THRESHOLDS } from '../engine/assumptions.js';
+import { formatMan } from '../format.js';
 import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import type { CaseDetail, ReplyValues } from '../app/service.js';
 import { ROLE_LABEL, isRole } from '../workflow/roles.js';
-import type { AiProvider } from './provider.js';
+import { AiError, type AiErrorCode, type AiProvider } from './provider.js';
 import { extractTokens, verifyFacts, type Facts } from './verify.js';
 
-export interface AssistResult { text: string; source: 'ai' | 'template'; note: string }
+/**
+ * 결과 모양: text(화면에 쓸 문장), source('ai' | 'fallback' = 템플릿 대체), note(사람이 읽는 설명),
+ * error(대체된 이유: no_key | timeout | http_error | verify_failed, AI를 요청하지 않았으면 없음).
+ */
+export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode }
+export interface AssistOptions { /** 사용자가 AI 사용을 요청했는지(요청했는데 키가 없으면 no_key) */ requested?: boolean }
 
-const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+const won = formatMan;
 const NEEDED_LABEL: Record<string, string> = {
   cash_outflow_date: '고정 피 현금 유출일(지급 일정)',
   payment_schedule: '고정 피 지급 일정',
@@ -26,6 +32,8 @@ export function buildFacts(d: CaseDetail): Facts {
   const nums = [
     d.item.amount, d.item.daysLeft, d.item.nominalRank, d.item.realRank, d.row.과거명목ROAS, d.row.과거실질ROAS,
     d.row.반품률, d.row.채널기준반품률, d.row.요청비중, d.row.기존집행비중, d.row.기안예상GMV, d.row.기안예상명목ROAS,
+    // 화면·문구에는 만 원 단위로 반올림한 금액이 나오므로 같은 값도 사실로 인정한다.
+    Math.round(d.item.amount / 10_000) * 10_000, d.penalty === null ? null : Math.round(d.penalty / 10_000) * 10_000,
     d.penalty, THRESHOLDS.perItemKrw, THRESHOLDS.planTotalKrw, THRESHOLDS.contractAnnualKrw, THRESHOLDS.covenantMinKrw,
   ].filter((x): x is number => typeof x === 'number');
   const dates = [
@@ -50,32 +58,32 @@ function templateSummary(d: CaseDetail): string {
 }
 
 /** AI 호출 → 숫자 대조 → 통과하면 AI 문장, 아니면 템플릿. */
-async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, template: string): Promise<AssistResult> {
-  if (!ai) return { text: template, source: 'template', note: 'AI 미사용' };
+async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, template: string, requested = false): Promise<AssistResult> {
+  if (!ai) return { text: template, source: 'fallback', note: 'AI 미사용', ...(requested ? { error: 'no_key' as const } : {}) };
   try {
     const out = (await ai.complete(prompt)).trim();
     if (out === '' || !verifyFacts(out, buildFacts(d)).ok) {
-      return { text: template, source: 'template', note: 'AI 문장 숫자 불일치: 미반영' };
+      return { text: template, source: 'fallback', note: 'AI 문장 숫자 불일치: 미반영', error: 'verify_failed' };
     }
     return { text: out, source: 'ai', note: '' };
   } catch (e) {
-    return { text: template, source: 'template', note: `AI 호출 실패: ${(e as Error).message}` };
+    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error' };
   }
 }
 
 const RULES = '새로운 숫자나 날짜를 만들지 말고, 승인·거절을 결정하거나 권하지 마세요. 한국어로 답하세요.';
 
-export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null): Promise<AssistResult> {
+export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const t = templateSummary(d);
-  return guarded(d, ai, `결재자가 읽을 3문장 이내 상신 근거 요약을 쓰세요. 아래 사실만 사용합니다. ${RULES}\n사실: ${t}`, t);
+  return guarded(d, ai, `결재자가 읽을 3문장 이내 상신 근거 요약을 쓰세요. 아래 사실만 사용합니다. ${RULES}\n사실: ${t}`, t, opts.requested);
 }
 
-export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null): Promise<AssistResult> {
+export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const req = d.requests.find((r) => r.needed === needed && r.status === 'requested');
   const owner = req && isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : 'Masil 재무팀';
   const label = NEEDED_LABEL[needed] ?? needed;
   const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${NEEDED_WHY[needed] ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
-  return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t);
+  return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t, opts.requested);
 }
 
 function templateCandidates(text: string): ReplyValues {

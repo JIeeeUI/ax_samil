@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { formal } from './formal.js';
 import type { ScenarioId } from '../src/engine/assumptions.js';
+import { formatMan } from '../src/format.js';
 import type { Status } from '../src/workflow/status.js';
 
-export const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+export const won = formatMan;
 
 export const STATUS_LABEL: Record<Status, string> = {
   finance_review: '재무 확인 대기', routed: '경로 판정됨(상신 대기)', submitted: '상신됨(결정 대기)', approved: '승인',
