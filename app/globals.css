@@ -282,3 +282,12 @@ table.hist th small { display: block; font-weight: 400; }
 .facts ul.attn > li { justify-content: flex-start; border-bottom: 0; padding: 5px 0; }
 .warn-ico { color: var(--accent); vertical-align: -3px; margin-right: 6px; flex: none; }
 table.list td.chk::before { font-weight: 400; }
+
+/* 처리 기록: 한 건 = 두 줄(무엇을 / 누가→누구에게), 오른쪽에 시각과 날짜 */
+ol.hist { list-style: none; margin: 0; padding: 0; }
+ol.hist > li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+ol.hist > li:last-child { border-bottom: 0; }
+.h-what { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h-who { color: var(--muted); font-size: 0.86rem; }
+.h-when { flex: none; text-align: right; display: flex; flex-direction: column; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.h-when .num { font-weight: 600; font-size: 0.92rem; }

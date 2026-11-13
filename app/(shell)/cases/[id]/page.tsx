@@ -253,23 +253,26 @@ export default async function CasePage({
       </Suspense>
 
       <details className="fold"><summary>처리 기록 {d.history.length}건</summary>
-        <div className="panel tablewrap"><table className="hist">
-          <thead>
-            <tr>
-              <th>날짜<small>(시연 업무일)</small></th>
-              <th title="실제로 기록된 시각입니다. 날짜는 시연용 업무일이라 다를 수 있습니다.">시각<small>(실제 기록)</small></th>
-              <th>보낸 사람</th><th>받는 부서(담당자)</th><th>무엇을</th>
-            </tr>
-          </thead>
-          <tbody>{d.history.map((h) => (
-            <tr key={h.id}>
-              <td>{h.businessDate}{h.simulated && <> <span className="muted">시연</span></>}</td>
-              <td className="num">{h.time}</td>
-              <td>{h.from.role === 'system' ? '자동 처리' : `${h.from.team}${h.from.name !== h.from.team ? ` ${h.from.name}` : ''}`}</td>
-              <td>{h.to ? h.to.label : '—'}</td>
-              <td>{ACTION_LABEL[h.action] ?? h.action}</td>
-            </tr>
-          ))}</tbody></table></div>
+        <div className="panel">
+          <p className="meta">날짜는 시연용 업무일이고, 시각은 실제로 기록된 시각입니다.</p>
+          <ol className="hist">
+            {d.history.map((h) => (
+              <li key={h.id}>
+                <div className="h-what">
+                  <strong>{ACTION_LABEL[h.action] ?? h.action}</strong>
+                  <span className="h-who">
+                    {h.from.role === 'system' ? '자동 처리' : `${h.from.team}${h.from.name !== h.from.team ? `(${h.from.name})` : ''}`}
+                    {h.to && <> <span aria-hidden="true">→</span><span className="sr"> 받는 부서 </span> {h.to.label}</>}
+                  </span>
+                </div>
+                <div className="h-when">
+                  <span className="num">{h.time}</span>
+                  <span className="muted">{h.businessDate}{h.simulated ? ' · 시연' : ''}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       </details>
 
       {i.kind === 'contract' && !['approved', 'closed', 'overdue'].includes(i.status) && canChangeContract(role) && (
