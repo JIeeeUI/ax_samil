@@ -3,10 +3,12 @@ import type { IsoDate } from '../engine/types.js';
 import { decisionRole, isRole, type Role } from './roles.js';
 
 export type Status =
-  | 'finance_review' | 'routed' | 'submitted' | 'approved' | 'rejected' | 'on_hold' | 'overdue' | 'closed';
+  | 'finance_review' | 'routed' | 'submitted' | 'approved' | 'rejected' | 'on_hold' | 'overdue' | 'closed'
+  | 'revision' | 'consulting';
 
 export type Action =
-  | 'confirm_finance' | 'submit' | 'approve' | 'reject' | 'hold' | 'reply' | 'resubmit' | 'close' | 'expire' | 'primary_return';
+  | 'confirm_finance' | 'submit' | 'approve' | 'reject' | 'hold' | 'reply' | 'resubmit' | 'close' | 'expire' | 'primary_return'
+  | 'finance_return' | 'adjust' | 'keep' | 'consult' | 'auto_submit';
 
 /** 더 이상 결정할 수 없는 상태 */
 export const TERMINAL: ReadonlySet<Status> = new Set<Status>(['approved', 'overdue', 'closed']);
@@ -20,7 +22,20 @@ type Allowed = 'decision' | readonly Actor[];
 const ANY_ROLE: readonly Actor[] = ['marketing', 'finance', 'contract', 'masil_ceo', 'ceo_board'];
 
 const TABLE: Record<Status, Partial<Record<Action, { to: Status; by: Allowed }>>> = {
-  finance_review: { confirm_finance: { to: 'routed', by: ['finance'] }, expire: { to: 'overdue', by: ['system'] } },
+  finance_review: {
+    confirm_finance: { to: 'routed', by: ['finance'] },
+    // 재무 반려(보완 요청): 재무는 반려와 의견만 낼 수 있고 최종 거절은 못 한다 [교육용 가정]
+    finance_return: { to: 'revision', by: ['finance'] },
+    expire: { to: 'overdue', by: ['system'] },
+  },
+  revision: {
+    adjust: { to: 'finance_review', by: ['marketing'] },
+    keep: { to: 'routed', by: ['marketing'] },
+    consult: { to: 'consulting', by: ['marketing'] },
+    auto_submit: { to: 'submitted', by: ['system'] },
+    expire: { to: 'overdue', by: ['system'] },
+  },
+  consulting: { expire: { to: 'overdue', by: ['system'] } },
   routed: { submit: { to: 'submitted', by: ['marketing', 'finance'] }, expire: { to: 'overdue', by: ['system'] } },
   submitted: {
     approve: { to: 'approved', by: 'decision' },
@@ -33,7 +48,8 @@ const TABLE: Record<Status, Partial<Record<Action, { to: Status; by: Allowed }>>
   on_hold: { reply: { to: 'routed', by: ANY_ROLE }, expire: { to: 'overdue', by: ['system'] } },
   rejected: {
     // 거절 후 재상신·종결은 마케팅만(재무는 재확인 안내만 본다) [교육용 가정]
-    resubmit: { to: 'submitted', by: ['marketing'] },
+    // 재상신하면 재무 확인 단계부터 다시 시작한다 [교육용 가정]
+    resubmit: { to: 'finance_review', by: ['marketing'] },
     close: { to: 'closed', by: ['marketing'] },
     expire: { to: 'overdue', by: ['system'] },
   },

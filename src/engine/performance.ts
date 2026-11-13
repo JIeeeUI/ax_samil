@@ -38,6 +38,16 @@ export interface InfluencerPerf {
   realRank: number | null;
 }
 
+/** 인플루언서 책임이 아니라고 보는 반품 사유 [가정] */
+export const OPERATIONAL_RETURN_REASONS: readonly string[] = ['오배송', '불량'];
+
+/** 반품 건수 중 운영·품질 원인(오배송·불량) 비중 */
+export function returnCauseSummary(room: PerfRoom): { total: number; operational: number; share: number } {
+  const total = room.sample.returns.length;
+  const operational = room.sample.returns.filter((r) => OPERATIONAL_RETURN_REASONS.includes(r.reason)).length;
+  return { total, operational, share: total === 0 ? 0 : operational / total };
+}
+
 const ratio = (num: number, den: number): number | null => (den === 0 ? null : num / den);
 
 interface Acc { orders: number; gmv: number; refunds: number; coupon: number; cpBefore: number }
@@ -45,14 +55,17 @@ interface Acc { orders: number; gmv: number; refunds: number; coupon: number; cp
 /** 캠페인별 누적(공헌이익 계산은 A05 5절 정의, 쿠폰·환불 이중 차감 없음). */
 function accumulateByCampaign(room: PerfRoom, a: AssumptionSet): Map<string, Acc> {
   const refunds = new Map(room.sample.returns.map((r) => [r.order_id, r.refund_amount_krw]));
+  const operational = new Set(room.sample.returns.filter((r) => OPERATIONAL_RETURN_REASONS.includes(r.reason)).map((r) => r.order_id));
   const cost = new Map(room.sample.costMaster.map((c) => [`${c.sku_id}|${c.channel_id}`, c]));
   const acc = new Map<string, Acc>();
   for (const o of room.sample.orders) {
     const k = cost.get(`${o.sku_id}|${o.channel_id}`);
     if (!k) throw new Error(`cost master missing for ${o.sku_id}|${o.channel_id}`);
     const g = o.gmv_krw;
-    const returned = refunds.has(o.order_id);
-    const r = refunds.get(o.order_id) ?? 0;
+    // 반품 원인 분리 보기: 오배송·불량 반품은 인플루언서 성과 계산에서 정상 판매로 본다(반품률 지표는 그대로).
+    const excluded = a.returnAttribution === 'demandOnly' && operational.has(o.order_id);
+    const returned = refunds.has(o.order_id) && !excluded;
+    const r = excluded ? 0 : refunds.get(o.order_id) ?? 0;
     let productCost = k.product_cost_krw * a.unitsPerOrder;
     let fee = ((a.channelFeeBasis === 'gmv' ? g : g - r) * k.channel_fee_pct) / 100;
     if (a.recoverCostOnRefund && returned) { productCost = 0; fee = 0; }
@@ -61,7 +74,7 @@ function accumulateByCampaign(room: PerfRoom, a: AssumptionSet): Map<string, Acc
       - (returned ? k.return_logistics_cost_krw : 0);
     if (a.calcMode === 'literal-calc-def') cp -= o.coupon_discount_krw + r;
     const x = acc.get(o.campaign_id) ?? { orders: 0, gmv: 0, refunds: 0, coupon: 0, cpBefore: 0 };
-    x.orders += 1; x.gmv += g; x.refunds += r; x.coupon += o.coupon_discount_krw; x.cpBefore += cp;
+    x.orders += 1; x.gmv += g; x.refunds += refunds.get(o.order_id) ?? 0; x.coupon += o.coupon_discount_krw; x.cpBefore += cp;
     acc.set(o.campaign_id, x);
   }
   return acc;

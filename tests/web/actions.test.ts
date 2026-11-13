@@ -50,7 +50,7 @@ test('reset restores 26 cases in finance_review and the baseline clock', async (
 
 test('decisionFromForm parses approve, reject and a complete hold', () => {
   expect(decisionFromForm({ decision: 'approve' })).toBe('approve');
-  expect(decisionFromForm({ decision: 'reject' })).toBe('reject');
+  expect(decisionFromForm({ decision: 'reject', rejectReason: '사유' })).toEqual({ reject: { reason: '사유' } });
   expect(decisionFromForm({ decision: 'hold', holdNeeded: 'x', holdOwner: 'finance', holdDue: '2026-07-04' }))
     .toEqual({ hold: { needed: 'x', ownerRole: 'finance', dueDate: '2026-07-04' } });
   expect(() => decisionFromForm({ decision: 'maybe' })).toThrow(/INVALID_DECISION/);

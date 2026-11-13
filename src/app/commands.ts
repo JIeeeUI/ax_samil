@@ -3,7 +3,7 @@ import type { IsoDate } from '../engine/types.js';
 import type { Role } from '../workflow/roles.js';
 import { defaultOwnerFor } from '../workflow/ownership.js';
 import type { HoldInput } from '../workflow/status.js';
-import type { Actor, Config, Decision, IntakeService, ReplyValues } from './service.js';
+import type { Actor, ConfigPatch, Decision, IntakeService, ReplyValues } from './service.js';
 
 export type Result = { ok: true } | { ok: false; error: string };
 
@@ -19,7 +19,8 @@ export async function attempt(fn: () => Promise<unknown>): Promise<Result> {
 
 /** 폼 값(문자열 맵)을 결정으로 바꾼다. 보류의 담당·기한 검증은 서비스(상태 기계)가 한다. */
 export function decisionFromForm(f: Record<string, string | undefined>): Decision {
-  if (f.decision === 'approve' || f.decision === 'reject') return f.decision;
+  if (f.decision === 'approve') return 'approve';
+  if (f.decision === 'reject') return { reject: { reason: f.rejectReason ?? '' } };
   if (f.decision === 'hold') {
     return { hold: { needed: f.holdNeeded ?? '', ownerRole: ((f.holdOwner ?? '') || defaultOwnerFor(f.holdNeeded ?? '')) as Role, dueDate: f.holdDue ?? '' } };
   }
@@ -28,8 +29,17 @@ export function decisionFromForm(f: Record<string, string | undefined>): Decisio
 
 export function commands(svc: IntakeService) {
   return {
-    confirmFinance: (id: string, role: Actor) => attempt(() => svc.confirmFinance(id, role)),
-    submit: (id: string, role: Actor) => attempt(() => svc.submit(id, role)),
+    confirmFinance: (id: string, role: Actor, opinion?: string) => attempt(() => svc.confirmFinance(id, role, { opinion })),
+    financeReturn: (id: string, role: Actor, input: Parameters<IntakeService['financeReturn']>[2]) => attempt(() => svc.financeReturn(id, role, input)),
+    replyRevision: (id: string, role: Actor, input: Parameters<IntakeService['replyRevision']>[2]) => attempt(() => svc.replyRevision(id, role, input)),
+    sendNotice: (id: string, role: Actor, input: Parameters<IntakeService['sendNotice']>[2]) => attempt(() => svc.sendNotice(id, role, input)),
+    recordNotice: (id: string, role: Actor, input: Parameters<IntakeService['recordNotice']>[2]) => attempt(() => svc.recordNotice(id, role, input)),
+    /** 상신은 되돌릴 수 없어 화면에서 한 번 더 확인한다(confirmed=false면 거부, 생략하면 기존처럼 처리). */
+    submit: (id: string, role: Actor, confirmed?: boolean) =>
+      attempt(async () => {
+        if (confirmed === false) throw new Error('CONFIRM_REQUIRED: 상신은 되돌릴 수 없어요. 확인 칸을 체크해 주세요');
+        await svc.submit(id, role);
+      }),
     decide: (id: string, role: Actor, d: Decision) => attempt(() => svc.decide(id, role, d)),
     resubmit: (id: string, role: Actor) => attempt(() => svc.resubmit(id, role)),
     close: (id: string, role: Actor) => attempt(() => svc.close(id, role)),
@@ -38,8 +48,8 @@ export function commands(svc: IntakeService) {
     proposeChange: (actor: Actor, fee: number) => attempt(() => svc.proposeContractChange({ actor, annualFixedFeeKrw: fee })),
     primaryEscalate: (id: string, role: Actor) => attempt(() => svc.primaryEscalate(id, role)),
     primaryHold: (id: string, role: Actor, hold: HoldInput) => attempt(() => svc.primaryHold(id, role, hold)),
-    primaryReturn: (id: string, role: Actor) => attempt(() => svc.primaryReturn(id, role)),
-    setConfig: (patch: Partial<Config>) => attempt(() => svc.setConfig(patch)),
+    primaryReturn: (id: string, role: Actor, reason: string) => attempt(() => svc.primaryReturn(id, role, reason)),
+    setConfig: (patch: ConfigPatch) => attempt(() => svc.setConfig(patch)),
     advanceClock: (to: IsoDate) => attempt(() => svc.advanceClock(to)),
     setScenario: (id: ScenarioId) => attempt(() => svc.setScenario(id)),
     reset: () => attempt(() => svc.reset()),

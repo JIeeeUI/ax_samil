@@ -58,7 +58,7 @@ test('terminal states reject every action', () => {
 });
 
 test('rejected can be resubmitted or closed', () => {
-  expect(transition(st('rejected'), 'resubmit', 'marketing')).toBe('submitted');
+  expect(transition(st('rejected'), 'resubmit', 'marketing')).toBe('finance_review');
   expect(transition(st('rejected'), 'close', 'marketing')).toBe('closed');
 });
 

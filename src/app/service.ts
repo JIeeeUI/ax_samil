@@ -1,28 +1,51 @@
 import { SCENARIOS, THRESHOLDS, type AssumptionSet, type ScenarioId } from '../engine/assumptions.js';
 import { addDays, daysBetween, isIsoDate } from '../engine/calendar.js';
-import { buildCases, planTotal, type Case } from '../engine/cases.js';
+import { buildCases, INF001_CONTRACT, planTotal, type Case } from '../engine/cases.js';
 import { simulateCash, type BreachWindow, type CashResult } from '../engine/cash.js';
+import { cashComparison, type CashComparison } from '../engine/cashGap.js';
 import { terminationPenalty } from '../engine/contract.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
 import type { DataRoom, IsoDate } from '../engine/types.js';
-import type { AlertRow, Clock, EventRow, InfoRequestRow, Repo, ReviewRow } from '../store/repo.js';
+import type { AlertRow, Clock, EventRow, InfoRequestRow, NoticeRow, Repo, RevisionRow, ReviewRow } from '../store/repo.js';
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
 import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
-import { canChangeContract, canReply, defaultOwnerFor, replyKeysFor } from '../workflow/ownership.js';
+import { SCHEDULE, canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
+import { computeCampaignPerformance, computeInfluencerPerformance } from '../engine/performance.js';
+import { canChangeContract, canReply, defaultOwnerFor, neededKo, replyKeysFor } from '../workflow/ownership.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
 
 export const CONTRACT_ID = 'CONTRACT-INF-001';
 export interface ContractOverrides { annualFixedFeeKrw?: number; cashOutflowDate?: IsoDate | null }
 export type Actor = Role | 'system';
-export type Decision = 'approve' | 'reject' | { hold: HoldInput };
+export type Decision = 'approve' | { reject: { reason: string } } | { hold: HoldInput };
+/** 상신 전 점검 구간 라벨(상태 기계는 그대로, 상태와 열린 확인 요청에서 파생) */
+export type CheckLabel = 'waiting_info' | 'ready' | 'submitted';
+export interface CheckResult {
+  label: CheckLabel | null;
+  /** ① 누구 승인(이유) ② 실효 결정 기한·남은 일수·철회 불가 ③ 근거 ④ 빠진 정보와 물어볼 곳 */
+  lines: [string, string, string, string];
+  evidence: {
+    nominalRoas: number | null; realRoas: number | null; realRoasDemandOnly: number | null;
+    influencerRealRoas: number | null; influencerRealRoasDemandOnly: number | null; stillLoss: boolean | null;
+  };
+}
+export interface Rejection { reason: string; actor: string; date: IsoDate; stage: 'final' | 'primary' }
 export interface ReplyValues { cashOutflowDate?: IsoDate; annualFixedFeeKrw?: number }
 export interface Raised { caseId: string; stage: string; kind: 'alert' | 'escalation' | 'expired' | 'parallel' | 'warning' }
 
 /** 화면에서 바꿀 수 있는 [가정] 설정값. 기본은 1단계 결재(twoStage 꺼짐). */
-export interface Config { twoStage: boolean; urgentDays: number; holdCapDays: number; alertPlan: AlertPlanId }
-export const DEFAULT_CONFIG: Config = { twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current' };
+export interface Config { twoStage: boolean; urgentDays: number; holdCapDays: number; alertPlan: AlertPlanId; returnReasons: Record<ReturnReason, boolean>; /** 결재 이후 기능을 화면에 보일지(기본 꺼짐) */ showExtended: boolean }
+export type ConfigPatch = Partial<Omit<Config, 'returnReasons'>> & { returnReasons?: Partial<Record<ReturnReason, boolean>> };
+export const DEFAULT_CONFIG: Config = {
+  twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current',
+  returnReasons: { cash_breach: true, loss_or_inversion: true, weak_basis: true, other: true },
+  showExtended: false,
+};
+/** 마케팅이 조정한 값(원본 자료는 그대로 두고 덮어쓴다). 이력은 사건 기록에 남는다. */
+export type Adjustments = Record<string, { settlementDate?: IsoDate; amount?: number }>;
+export interface AdjustmentRecord { field: 'settlementDate' | 'amount'; from: string | number; to: string | number; date: IsoDate }
 
 export interface ReviewView {
   state: ReviewRow['state']; parallel: boolean; parallelDate: IsoDate | null; holdDue: IsoDate | null;
@@ -38,12 +61,14 @@ export interface TodayItem {
   id: string; kind: 'plan' | 'contract'; influencerId: string; influencer: string; campaign: string;
   amount: number; scale: '표본' | '풀스케일'; deadline: IsoDate; settlementDate: IsoDate | '';
   effectiveDeadline: IsoDate; daysLeft: number; alertStage: string; status: Status;
-  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
+  routeLevel: RouteLevel; routeLabel: string; /** 성과 피 포함 여부 미확인으로 경로가 잠정인 건 */ provisional: boolean; /** 상신 전 점검 구간 라벨 */ checkLabel: CheckLabel | null; /** 열린 확인 요청의 담당 역할("내 차례" 판단용) */ openRequestOwners: Role[]; /** 1차/2차 결재를 켰고 1차 대표 검토가 끝나기 전(병행 상신 전)인 건 */ primaryPending: boolean; inBreach: '예' | '아니오' | '미확인'; issues: string[];
   nominalRank: number | ''; realRank: number | ''; boardDate: IsoDate | null;
 }
 export interface TodayView {
   asOf: IsoDate; today: IsoDate; scenario: ScenarioId; assumptionVersion: string;
   breaches: BreachWindow[]; items: TodayItem[]; linkWarnings: LinkWarning[]; openRequests: number;
+  /** 재무 공식 전망과 재계산의 차이(재무 확인 필요 표시용) */
+  cashComparison: CashComparison;
 }
 export interface CaseDetail {
   item: TodayItem; row: IntakeRow; reasons: string[]; needsInfo: string[]; events: EventRow[];
@@ -51,6 +76,19 @@ export interface CaseDetail {
   notes: string[]; penalty: number | null; escalation: readonly string[] | null; alerts: AlertRow[];
   /** 1차/2차 결재를 켠 CEO/이사회 경로 건에만 값이 있다 */
   review: ReviewView | null;
+  /** 거절된 상태일 때 마지막 거절 사유 */
+  rejection: Rejection | null;
+  cashComparison: CashComparison;
+  check: CheckResult;
+  revisions: RevisionRow[]; adjustments: AdjustmentRecord[];
+  /** 자동 갱신 계약의 에이전시 통보 작업(결정이 난 뒤에만 있다) */
+  notice: NoticeRow | null;
+  /** 아직 결정 전인 계약이 통보 없이 기한을 넘기면 자동 갱신된다는 경고 */
+  noticeWarning: string | null;
+  /** 엔진 결과로 미리 체크해 둘 반려 사유(설정에서 켜 둔 것만) */
+  returnHints: ReturnReason[];
+  /** 지금 반려할 수 있는지(왕복 1회, 실효 기한까지 5일 초과) */
+  returnState: { allowed: boolean; why: string | null; dueIfReturnedToday: IsoDate };
 }
 
 interface Computed {
@@ -61,10 +99,49 @@ interface Computed {
 /** 사람 역할이 대신 입력하는 결재·회신은 모의로 표시한다(명세 11장). */
 const SIMULATED_ACTORS: ReadonlySet<Actor> = new Set<Actor>(['masil_ceo', 'ceo_board', 'contract']);
 
+const RETURN_REASON_LABEL_KO: Record<ReturnReason, string> = { cash_breach: '현금 위험 구간', loss_or_inversion: '손실 캠페인·배분 역전', weak_basis: '근거 부족(예상 GMV)', other: '기타' };
+
+function adjustmentsFrom(events: EventRow[]): AdjustmentRecord[] {
+  return events.filter((e) => e.action === 'adjust').flatMap((e) => ((e.detail as { changes?: AdjustmentRecord[] } | null)?.changes ?? []));
+}
+
+/** 상신 전 점검 라벨: 열린 확인 요청이나 빠진 정보가 있으면 확인 대기, 상신 전이고 막힘이 없으면 상신 준비 완료, 상신 이후는 상신함 */
+function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boolean): CheckLabel | null {
+  if (status === 'revision' || status === 'consulting' || status === 'overdue' || status === 'closed') return null;
+  if (hasOpenRequest) return 'waiting_info';
+  if (status === 'finance_review' || status === 'routed') return missingInfo ? 'waiting_info' : 'ready';
+  return 'submitted';
+}
+
+function requireReason(reason: string | undefined): void {
+  if (typeof reason !== 'string' || reason.trim() === '') throw new Error('REASON_REQUIRED: 거절 사유를 입력해야 합니다');
+}
+
+function applyAdjustments(room: DataRoom, adj: Adjustments): DataRoom {
+  if (Object.keys(adj).length === 0) return room;
+  return {
+    ...room,
+    sample: {
+      ...room.sample,
+      budgetPlan: room.sample.budgetPlan.map((p) => {
+        const a = adj[p.plan_id];
+        if (!a) return p;
+        return {
+          ...p,
+          ...(a.settlementDate ? { settlement_date: a.settlementDate } : {}),
+          ...(a.amount !== undefined ? { requested_budget_krw: a.amount } : {}),
+        };
+      }),
+    },
+  };
+}
+
 export class IntakeService {
   private repo: Repo;
   private room: DataRoom;
   constructor(deps: { repo: Repo; room: DataRoom }) { this.repo = deps.repo; this.room = deps.room; }
+
+  private adjustedRoom(adj: Adjustments | null): DataRoom { return applyAdjustments(this.room, adj ?? {}); }
 
   // ---------- 계산 ----------
   private async compute(): Promise<Computed> {
@@ -73,11 +150,12 @@ export class IntakeService {
     const scenario = (await this.repo.getSetting<ScenarioId>('scenario')) ?? 'baseline';
     const a = SCENARIOS[scenario];
     const contract = (await this.repo.getSetting<ContractOverrides>('contract')) ?? {};
-    const cases = buildCases(this.room, contract);
-    const cash = simulateCash(this.room.full, a);
+    const room = applyAdjustments(this.room, (await this.repo.getSetting<Adjustments>('adjustments')) ?? {});
+    const cases = buildCases(room, contract);
+    const cash = simulateCash(room.full, a);
     const total = planTotal(cases);
     const routes = new Map(cases.map((k) => [k.id, routeCase(k, { breaches: cash.breaches, planTotal: total })]));
-    return { a, clock, scenario, contract, cases, routes, cash, intake: buildIntake(this.room, a, clock.today, contract) };
+    return { a, clock, scenario, contract, cases, routes, cash, intake: buildIntake(room, a, clock.today, contract) };
   }
 
   private snapshot(c: Computed, id: string) {
@@ -130,6 +208,7 @@ export class IntakeService {
     await this.repo.setClock({ asOf: a.asOf, today: a.asOf });
     await this.repo.setSetting('scenario', 'baseline');
     await this.repo.setSetting('contract', {});
+    await this.repo.setSetting('adjustments', {});
     await this.repo.setSetting('alertPlanActivatedOn', a.asOf);
     const c = await this.compute();
     for (const k of c.cases) {
@@ -168,7 +247,7 @@ export class IntakeService {
     const cfg = await this.getConfig();
     const activated = (await this.repo.getSetting<IsoDate>('alertPlanActivatedOn')) ?? c.clock.asOf;
     for (const st of await this.repo.listStates()) {
-      const status = st.status as Status;
+      let status = st.status as Status;
       if (TERMINAL.has(status)) continue;
       const k = c.cases.find((x) => x.id === st.caseId)!;
       const stages = stagesDue(today, k.effectiveDeadline);
@@ -183,9 +262,29 @@ export class IntakeService {
         raised.push({ caseId: st.caseId, stage: 'overdue', kind: 'expired' });
         continue;
       }
-      raised.push(...(await this.runPlan(c, cfg, activated, st, k)));
+      if ((status === 'revision' || status === 'consulting') && (await this.forwardUnanswered(c, st.caseId, st.routeLevel, status))) status = 'submitted';
+      raised.push(...(await this.runPlan(c, cfg, activated, { ...st, status }, k)));
     }
     return raised;
+  }
+
+  /** 반려 회신 기한까지 답이 없으면 "미응답"으로 표시하고 재무 의견을 붙여 결재자에게 전달한다(결정이 아니라 전달). */
+  private async forwardUnanswered(c: Computed, caseId: string, routeLevel: string, from: 'revision' | 'consulting' = 'revision'): Promise<boolean> {
+    // 협의 중인 건은 협의 결과 입력이 같은 기한까지 없으면 "협의 미완료"로 전달한다(결과 입력은 금요일 범위).
+    const open = (await this.repo.listRevisions(caseId)).find((r) => r.status === (from === 'revision' ? 'open' : 'consult'));
+    if (!open || open.dueDate >= c.clock.today) return false;
+    if (!(await this.repo.transitionState(caseId, from, { status: 'submitted', routeLevel, updatedBusinessDate: c.clock.today }))) return false;
+    await this.repo.closeRevision(open.id, 'unanswered', null, c.clock.today, open.status);
+    await this.log(c, caseId, 'system', 'revision_unanswered', {
+      simulated: false,
+      detail: {
+        dueDate: open.dueDate, financeOpinion: open.opinion, reasons: open.reasons.map((x) => RETURN_REASON_LABEL_KO[x as ReturnReason] ?? x),
+        message: from === 'revision' ? '반려 회신 기한까지 미응답: 재무 의견을 붙여 결재자에게 전달' : '협의 미완료: 재무 의견을 붙여 결재자에게 전달',
+      },
+    });
+    // 일반 재무 확인을 거치지 않고 올라가므로 필요한 확인 요청을 여기서 만든다.
+    await this.ensureInfoRequests(await this.compute(), caseId, false);
+    return true;
   }
 
   // ---------- 조회 ----------
@@ -207,6 +306,7 @@ export class IntakeService {
           const rv = reviews.get(k.id);
           return (!rv || rv.state === 'pending' || rv.state === 'held') && !(rv?.parallel);
         })(),
+        checkLabel: checkLabelFor(st.status, (owners.get(k.id) ?? []).length > 0, c.routes.get(k.id)!.needsInfo.length > 0),
         provisional: !TERMINAL.has(st.status) && c.routes.get(k.id)!.needsInfo.includes('performance_fee_terms'), inBreach: row.하회구간해당,
         issues: row.이슈 === '' ? [] : row.이슈.split(';'), nominalRank: row.명목순위, realRank: row.실질순위,
         boardDate: st.routeLevel === 'CEO_BOARD' ? THRESHOLDS.boardDate : null,
@@ -242,6 +342,7 @@ export class IntakeService {
       breaches: c.cash.breaches, items: this.buildItems(c, sm, await this.reviewMap(), (await this.getConfig()).twoStage, await this.ownerMap()),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([k, v]) => [k, v.status]))),
       openRequests: (await this.repo.listInfoRequests({ status: 'requested' })).length,
+      cashComparison: cashComparison(this.adjustedRoom(await this.repo.getSetting<Adjustments>('adjustments')).full, c.a),
     };
   }
 
@@ -274,7 +375,80 @@ export class IntakeService {
       notes, penalty: k.kind === 'contract' ? terminationPenalty(k.amount, '2026-09-01') : null,
       escalation: esc ? ESCALATION_OPTIONS : null, alerts,
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
+      rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
+      cashComparison: cashComparison(this.room.full, c.a),
+      check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
+      revisions: await this.repo.listRevisions(id),
+      notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
+      noticeWarning: k.kind === 'contract' && needsEscalation(item.status) && item.daysLeft <= 3 && item.daysLeft >= 0
+        ? `통보 미완료 시 자동 갱신: 결정 기한 ${item.effectiveDeadline}까지 결정하고 통보하지 않으면 현재 조건으로 자동 갱신됩니다.` : null,
+      adjustments: adjustmentsFrom(events),
+      returnHints: this.hints(item, c.intake.find((r) => r.제안ID === id)!, await this.getConfig()),
+      returnState: await this.returnState(c, id, item.effectiveDeadline),
     };
+  }
+
+  private hints(item: TodayItem, row: IntakeRow, cfg: Config): ReturnReason[] {
+    const out: ReturnReason[] = [];
+    if (item.inBreach === '예') out.push('cash_breach');
+    if (item.issues.includes('LOSS') || item.issues.includes('ALLOCATION_INVERSION')) out.push('loss_or_inversion');
+    if (item.kind === 'plan' && row.기안예상GMV === '') out.push('weak_basis');
+    return out.filter((r) => cfg.returnReasons[r]);
+  }
+
+  private async returnState(c: Computed, id: string, eff: IsoDate): Promise<CaseDetail['returnState']> {
+    const used = (await this.repo.listRevisions(id)).length;
+    const allowed = used === 0 && canReturn(c.clock.today, eff);
+    const why = used > 0 ? '반려는 한 번만 할 수 있어요(왕복 1회). 이번에는 의견을 붙여 상신하세요.'
+      : !allowed ? '결정 기한까지 5일 이하라 반려할 수 없어요. 의견을 붙여 바로 상신하세요.' : null;
+    return { allowed, why, dueIfReturnedToday: returnDueDate(c.clock.today, eff) };
+  }
+
+  /** 점검 결과 네 줄(계산·판정·초안까지만 한다. 상신·승인은 사람이 한다). */
+  private checkResult(c: Computed, item: TodayItem, route: Route, isContract: boolean, openRequests: InfoRequestRow[]): CheckResult {
+    const camps = computeCampaignPerformance(this.room, c.a);
+    const demand = { ...c.a, returnAttribution: 'demandOnly' as const };
+    const campsD = computeCampaignPerformance(this.room, demand);
+    const infs = computeInfluencerPerformance(this.room, c.a);
+    const infsD = computeInfluencerPerformance(this.room, demand);
+    const k = c.cases.find((x) => x.id === item.id)!;
+    const camp = k.campaignId ? camps.find((x) => x.campaignId === k.campaignId) : undefined;
+    const campD = k.campaignId ? campsD.find((x) => x.campaignId === k.campaignId) : undefined;
+    const inf = infs.find((x) => x.influencerId === k.influencerId);
+    const infD = infsD.find((x) => x.influencerId === k.influencerId);
+    const nominal = camp ? camp.nominalRoas : inf?.nominalRoas ?? null;
+    const real = camp ? camp.realRoas : inf?.realRoas ?? null;
+    const realD = campD ? campD.realRoas : infD?.realRoas ?? null;
+    const f2 = (n: number | null) => (n === null ? '계산 불가' : n.toFixed(2));
+    const gap = cashComparison(this.room.full, c.a);
+    const missing = [...new Set([...route.needsInfo, ...openRequests.map((q) => q.needed)])];
+    const ask = (needed: string) => {
+      const open = openRequests.find((q) => q.needed === needed);
+      const owner = open?.ownerRole ?? defaultOwnerFor(needed);
+      return `${neededKo(needed)} → ${isRole(owner) ? ROLE_LABEL[owner] : owner}에 확인${open ? '(요청함)' : ''}`;
+    };
+    const stillLoss = real !== null && realD !== null ? real < 0 && realD < 0 : null;
+    const unit = isContract ? '인플루언서' : '캠페인';
+    return {
+      label: item.checkLabel,
+      lines: [
+        `① ${ROUTE_LABEL[item.routeLevel]} 승인 필요 — ${route.reasons.join(' / ')}${item.provisional ? ' (잠정)' : ''}`,
+        `② 실효 결정 기한 ${item.effectiveDeadline}, 남은 ${item.daysLeft}일. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
+        `③ ${unit} 성과 명목 ROAS ${f2(nominal)} vs 실질 ROAS ${f2(real)}${real !== null && real < 0 ? '(광고비를 빼면 손해)' : ''}; 반품 원인 분리 보기[가정: 오배송·불량은 인플루언서 책임이 아님] 실질 ${f2(realD)}${stillLoss === true ? '(여전히 손실, 회사 손익은 그대로)' : ''}; ${gap.lines.join(', ')}${gap.needsFinanceCheck ? ' → 재무 확인 필요' : ''}`,
+        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}`,
+      ],
+      evidence: {
+        nominalRoas: nominal, realRoas: real, realRoasDemandOnly: realD,
+        influencerRealRoas: inf?.realRoas ?? null, influencerRealRoasDemandOnly: infD?.realRoas ?? null, stillLoss,
+      },
+    };
+  }
+
+  private lastRejection(events: EventRow[]): Rejection | null {
+    const e = [...events].reverse().find((x) => x.action === 'reject' || x.action === 'primary_return');
+    if (!e) return null;
+    const reason = (e.detail as { reason?: string } | null)?.reason ?? '';
+    return { reason, actor: e.actor_role, date: e.business_date, stage: e.action === 'reject' ? 'final' : 'primary' };
   }
 
   /** 종결된 건에 남은 열린 확인 요청을 닫는다. */
@@ -285,7 +459,7 @@ export class IntakeService {
   }
 
   // ---------- 상태 변경 ----------
-  private async act(id: string, actor: Actor, action: Action, opts: { hold?: HoldInput; rejudge?: boolean } = {}) {
+  private async act(id: string, actor: Actor, action: Action, opts: { hold?: HoldInput; rejudge?: boolean; detail?: unknown } = {}) {
     const c = await this.compute();
     const st = await this.requireState(id);
     const next = transition(st, action, actor, { today: c.clock.today, hold: opts.hold });
@@ -293,20 +467,97 @@ export class IntakeService {
     const ok = await this.repo.transitionState(id, st.status, { status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
     if (!ok) throw new Error(`INVALID_TRANSITION: ${id}: 방금 다른 요청으로 이미 처리되었습니다(${action})`);
     if (TERMINAL.has(next)) await this.closeOpenRequests(id);
-    await this.log(c, id, actor, action, { detail: opts.hold });
+    await this.log(c, id, actor, action, { detail: opts.detail ?? opts.hold });
     return c;
   }
 
-  async confirmFinance(id: string, actor: Actor): Promise<void> {
-    const c = await this.act(id, actor, 'confirm_finance', { rejudge: true });
+  async confirmFinance(id: string, actor: Actor, opts: { opinion?: string } = {}): Promise<void> {
+    const opinion = opts.opinion?.trim();
+    // 반려할 수 없는 경우(왕복 1회를 썼거나 기한까지 5일 이하)에는 의견을 붙여 상신해야 한다.
+    const st0 = await this.requireState(id);
+    if (st0.status === 'finance_review' && !opinion) {
+      const c0 = await this.compute();
+      if (!(await this.returnState(c0, id, c0.cases.find((k) => k.id === id)!.effectiveDeadline)).allowed && (await this.repo.listRevisions(id)).length > 0) {
+        throw new Error('OPINION_REQUIRED: 이미 반려한 건은 재무 의견을 붙여 상신해야 합니다');
+      }
+    }
+    const c = await this.act(id, actor, 'confirm_finance', { rejudge: true, ...(opinion ? { detail: { financeOpinion: opinion } } : {}) });
     await this.ensureInfoRequests(c, id, false);
   }
+  // ---------- 재무 반려(보완 요청)와 마케팅 회신 ----------
+  async financeReturn(id: string, actor: Actor, input: { reasons: ReturnReason[]; otherText?: string; opinion: string }): Promise<void> {
+    if (actor !== 'finance') throw new Error(`ROLE_NOT_ALLOWED: 반려는 재무팀만 합니다(${actor})`);
+    const opinion = (input.opinion ?? '').trim();
+    if (opinion === '') throw new Error('OPINION_REQUIRED: 재무 의견을 입력해야 합니다');
+    const cfg = await this.getConfig();
+    const reasons = [...new Set(input.reasons ?? [])];
+    if (reasons.length === 0) throw new Error('REASON_REQUIRED: 반려 사유를 하나 이상 선택해야 합니다');
+    for (const r of reasons) {
+      if (!isReturnReason(r) || !cfg.returnReasons[r]) throw new Error(`INVALID_REASON: 사용할 수 없는 반려 사유입니다(${String(r)})`);
+    }
+    const otherText = (input.otherText ?? '').trim();
+    if (reasons.includes('other') && otherText === '') throw new Error('OTHER_TEXT_REQUIRED: 기타 사유를 입력해야 합니다');
+    const st = await this.requireState(id);
+    if (st.status !== 'finance_review') throw new Error(`INVALID_TRANSITION: ${st.status} 상태에서 반려할 수 없습니다`);
+    const c = await this.compute();
+    const rs = await this.returnState(c, id, c.cases.find((k) => k.id === id)!.effectiveDeadline);
+    if (!rs.allowed) throw new Error(`${(await this.repo.listRevisions(id)).length > 0 ? 'ROUND_LIMIT' : 'RETURN_NOT_ALLOWED'}: ${rs.why}`);
+    const round = (await this.repo.listRevisions(id)).length + 1;
+    const revId = await this.repo.addRevision({ caseId: id, round, reasons, otherText: otherText || undefined, opinion, returnDate: c.clock.today, dueDate: rs.dueIfReturnedToday });
+    try {
+      await this.act(id, actor, 'finance_return', { detail: { reasons, otherText, opinion, dueDate: rs.dueIfReturnedToday, round } });
+    } catch (e) {
+      await this.repo.deleteRevision(revId);
+      throw e;
+    }
+  }
+
+  /** 마케팅의 반려 회신: 조정함 / 변경 없음 / 협의 필요 */
+  async replyRevision(id: string, actor: Actor, input: { kind: 'adjust' | 'keep' | 'consult'; text: string; settlementDate?: IsoDate; amount?: number }): Promise<void> {
+    if (actor !== 'marketing') throw new Error(`ROLE_NOT_ALLOWED: 반려 회신은 마케팅만 합니다(${actor})`);
+    const st = await this.requireState(id);
+    if (st.status !== 'revision') throw new Error(`INVALID_TRANSITION: ${st.status} 상태에서는 반려 회신을 받지 않습니다`);
+    const open = (await this.repo.listRevisions(id)).find((r) => r.status === 'open');
+    if (!open) throw new Error('REQUEST_NOT_OPEN: 열린 반려가 없습니다');
+    const text = (input.text ?? '').trim();
+    if (text === '') throw new Error('TEXT_REQUIRED: 회신 내용을 입력해야 합니다');
+    const c0 = await this.compute();
+    if (input.kind === 'keep' || input.kind === 'consult') {
+      const cc = await this.act(id, actor, input.kind, { detail: { text, financeOpinion: open.opinion } });
+      await this.repo.closeRevision(open.id, input.kind === 'keep' ? 'kept' : 'consult', text, c0.clock.today);
+      if (input.kind === 'keep') await this.ensureInfoRequests(cc, id, false);
+      return;
+    }
+    if (input.kind !== 'adjust') throw new Error(`INVALID_ADJUSTMENT: 알 수 없는 회신 종류(${String(input.kind)})`);
+    const k = c0.cases.find((x) => x.id === id)!;
+    if (k.kind !== 'plan') throw new Error('INVALID_ADJUSTMENT: 전속계약은 집행일·요청액을 조정하지 않습니다(계약 조건 변경으로 처리)');
+    const patch: Adjustments[string] = {};
+    const changes: AdjustmentRecord[] = [];
+    if (input.settlementDate !== undefined) {
+      if (!isIsoDate(input.settlementDate)) throw new Error('INVALID_ADJUSTMENT: 집행일이 날짜가 아닙니다');
+      if (input.settlementDate < addDays(c0.clock.today, SCHEDULE.noReturnWithinDays)) throw new Error(`INVALID_ADJUSTMENT: 집행일은 오늘부터 ${SCHEDULE.noReturnWithinDays}일 뒤 이후여야 합니다(결정 기한이 당겨지지 않게)`);
+      if (input.settlementDate !== k.settlementDate) { patch.settlementDate = input.settlementDate; changes.push({ field: 'settlementDate', from: k.settlementDate ?? '', to: input.settlementDate, date: c0.clock.today }); }
+    }
+    if (input.amount !== undefined) {
+      if (!Number.isInteger(input.amount) || input.amount <= 0) throw new Error('INVALID_ADJUSTMENT: 요청액은 양의 정수(원)여야 합니다');
+      if (input.amount !== k.amount) { patch.amount = input.amount; changes.push({ field: 'amount', from: k.amount, to: input.amount, date: c0.clock.today }); }
+    }
+    if (changes.length === 0) throw new Error('INVALID_ADJUSTMENT: 바뀐 집행일 또는 요청액이 없습니다(바꾸지 않으려면 "변경 없음"을 고르세요)');
+    // 먼저 상태 전이를 선점한 한 요청만 조정값을 쓴다(진 요청이 이긴 요청의 값을 지우지 않게).
+    await this.act(id, actor, 'adjust', { detail: { text, changes } });
+    const prev = (await this.repo.getSetting<Adjustments>('adjustments')) ?? {};
+    await this.repo.setSetting('adjustments', { ...prev, [id]: { ...prev[id], ...patch } });
+    await this.repo.closeRevision(open.id, 'adjusted', text, c0.clock.today);
+    await this.rejudge(await this.compute(), id);
+  }
+
   async submit(id: string, actor: Actor): Promise<void> {
     await this.act(id, actor, 'submit');
     await this.sweepReview();
   }
   async resubmit(id: string, actor: Actor): Promise<void> {
     await this.act(id, actor, 'resubmit');
+    if (id === CONTRACT_ID) await this.voidNotice();
     if (await this.repo.getReview(id)) {
       await this.repo.saveReview({ caseId: id, state: 'pending', parallel: false, parallelDate: null, holdDue: null, holdRequestId: null });
     }
@@ -315,6 +566,7 @@ export class IntakeService {
   async close(id: string, actor: Actor): Promise<void> { await this.act(id, actor, 'close'); }
 
   async decide(id: string, actor: Actor, decision: Decision): Promise<void> {
+    if (typeof decision !== 'string' && 'reject' in decision) requireReason(decision.reject.reason);
     // 1차/2차를 켠 CEO/이사회 경로: CEO는 2차 요청(1차 상신 또는 병행 상신)이 있어야 결정한다.
     let openFirstStage: ReviewRow | null = null;
     if (actor === 'ceo_board' && (await this.getConfig()).twoStage) {
@@ -327,8 +579,9 @@ export class IntakeService {
       }
     }
     await this.decideCore(id, actor, decision);
+    if (id === CONTRACT_ID && decision !== undefined && !(typeof decision !== 'string' && 'hold' in decision)) await this.createNotice(decision === 'approve' ? 'approve' : 'reject');
     // CEO가 승인·거절로 먼저 결정했으면 1차는 "병행 결정"으로 닫는다(보류는 결정이 아니라 1차를 닫지 않는다).
-    if (openFirstStage && (decision === 'approve' || decision === 'reject')) {
+    if (openFirstStage && !(typeof decision !== 'string' && 'hold' in decision)) {
       const cur = await this.repo.getReview(id);
       const closed = await this.repo.claimReview(id, { states: ['pending', 'held'] }, { state: 'closed_parallel', holdDue: null, holdRequestId: null });
       if (closed) {
@@ -339,12 +592,62 @@ export class IntakeService {
   }
 
   private async decideCore(id: string, actor: Actor, decision: Decision): Promise<void> {
-    if (decision === 'approve' || decision === 'reject') { await this.act(id, actor, decision); return; }
+    if (decision === 'approve') { await this.act(id, actor, 'approve'); return; }
+    if ('reject' in decision) {
+      // 거절하면 그 건의 열린 확인 요청은 닫는다. 재상신 때 필요한 것만 다시 만든다.
+      await this.act(id, actor, 'reject', { detail: { reason: decision.reject.reason.trim() } });
+      await this.closeOpenRequests(id);
+      return;
+    }
     const c = await this.act(id, actor, 'hold', { hold: decision.hold });
     await this.repo.addInfoRequest({
       caseId: id, needed: decision.hold.needed, ownerRole: decision.hold.ownerRole, dueDate: decision.hold.dueDate,
       createdDate: c.clock.today, simulated: SIMULATED_ACTORS.has(actor),
     });
+  }
+
+  // ---------- 에이전시 통보 작업 (자동 갱신 계약) ----------
+  /** 결정에 따른 통보: 거절 → 해지 통보(필수), 조건 변경 후 승인 → 변경 통보(필수), 그대로 승인 → 통보 불요(갱신 확정 기록만). [교육용 가정] */
+  private async createNotice(outcome: 'approve' | 'reject'): Promise<void> {
+    const c = await this.compute();
+    const contract = (await this.repo.getSetting<ContractOverrides>('contract')) ?? {};
+    const changed = contract.annualFixedFeeKrw !== undefined && contract.annualFixedFeeKrw !== INF001_CONTRACT.annualFixedFeeKrw;
+    const kind: NoticeRow['kind'] = outcome === 'reject' ? 'terminate' : changed ? 'change' : 'renew_confirm';
+    const k = c.cases.find((x) => x.id === CONTRACT_ID)!;
+    await this.repo.putNotice({ caseId: CONTRACT_ID, kind, required: kind !== 'renew_confirm', dueDate: k.deadline, createdDate: c.clock.today });
+    await this.log(c, CONTRACT_ID, 'system', 'notice_created', { simulated: false, detail: { kind, required: kind !== 'renew_confirm', dueDate: k.deadline, sender: 'marketing', recorder: 'contract' } });
+  }
+
+  private async voidNotice(): Promise<void> {
+    const n = await this.repo.getNotice(CONTRACT_ID);
+    if (!n || n.status !== 'open') return; // 이미 발송된 통보는 취소하지 않는다
+    await this.repo.updateNotice(CONTRACT_ID, n.status, { status: 'void' });
+    await this.log(await this.compute(), CONTRACT_ID, 'system', 'notice_void', { simulated: false, detail: { reason: '재상신으로 이전 결정의 통보를 취소' } });
+  }
+
+  /** 발송: 마케팅(상대방에게 결과 통보) */
+  async sendNotice(caseId: string, actor: Actor, input: { kind: NoticeRow['kind']; sentDate: IsoDate }): Promise<void> {
+    if (actor !== 'marketing') throw new Error(`ROLE_NOT_ALLOWED: 통보 발송은 마케팅이 합니다(${actor})`);
+    const n = await this.repo.getNotice(caseId);
+    if (!n || n.status !== 'open') throw new Error('NOTICE_NOT_OPEN: 발송할 통보 작업이 없습니다');
+    if (!n.required) throw new Error('NOTICE_NOT_REQUIRED: 이 결정은 통보가 필요 없습니다(갱신 확정 기록만)');
+    if (input.kind !== n.kind) throw new Error(`NOTICE_KIND_MISMATCH: 이 결정에 맞는 통보는 ${n.kind}입니다`);
+    if (!isIsoDate(input.sentDate)) throw new Error('INVALID_DATE: 발송일이 날짜가 아닙니다');
+    if (input.sentDate < n.createdDate || input.sentDate > (await this.getClock()).today) throw new Error(`INVALID_DATE: 발송일은 결정일(${n.createdDate}) 이후, 오늘 이전이어야 합니다`);
+    if (!(await this.repo.updateNotice(caseId, 'open', { status: 'sent', sentDate: input.sentDate, sentBy: actor }))) throw new Error('NOTICE_NOT_OPEN: 방금 다른 요청으로 처리되었습니다');
+    await this.log(await this.compute(), caseId, actor, 'notice_sent', { simulated: true, detail: { kind: n.kind, sentDate: input.sentDate, late: input.sentDate > n.dueDate } });
+  }
+
+  /** 기록: 계약 담당(통보·회신 기록 보관). 수령 증빙 여부를 입력해야 완료된다. */
+  async recordNotice(caseId: string, actor: Actor, input: { receiptProof: boolean }): Promise<void> {
+    if (actor !== 'contract') throw new Error(`ROLE_NOT_ALLOWED: 통보 기록은 계약 담당이 합니다(${actor})`);
+    const n = await this.repo.getNotice(caseId);
+    if (!n || (n.status !== 'open' && n.status !== 'sent')) throw new Error('NOTICE_NOT_OPEN: 기록할 통보 작업이 없습니다');
+    if (n.required && n.status !== 'sent') throw new Error('NOTICE_NOT_SENT: 먼저 마케팅이 통보를 발송해야 합니다');
+    if (typeof input.receiptProof !== 'boolean') throw new Error('INVALID_REPLY: 수령 증빙 여부를 입력해야 합니다');
+    const today = (await this.getClock()).today;
+    if (!(await this.repo.updateNotice(caseId, n.status, { status: 'done', receiptProof: input.receiptProof, recordedDate: today, recordedBy: actor }))) throw new Error('NOTICE_NOT_OPEN: 방금 다른 요청으로 처리되었습니다');
+    await this.log(await this.compute(), caseId, actor, 'notice_recorded', { simulated: true, detail: { kind: n.kind, receiptProof: input.receiptProof } });
   }
 
   // ---------- 전속계약 조건·회신 ----------
@@ -461,17 +764,25 @@ export class IntakeService {
 
   // ---------- 설정 ----------
   async getConfig(): Promise<Config> {
-    return { ...DEFAULT_CONFIG, ...((await this.repo.getSetting<Partial<Config>>('config')) ?? {}) };
+    const s = (await this.repo.getSetting<Partial<Config>>('config')) ?? {};
+    return { ...DEFAULT_CONFIG, ...s, returnReasons: { ...DEFAULT_CONFIG.returnReasons, ...(s.returnReasons ?? {}) } };
   }
 
-  async setConfig(patch: Partial<Config>): Promise<void> {
+  async setConfig(patch: ConfigPatch): Promise<void> {
     const bad = (why: string) => new Error(`INVALID_CONFIG: ${why}`);
     if (patch.twoStage !== undefined && typeof patch.twoStage !== 'boolean') throw bad('twoStage는 켬/끔이어야 합니다');
     if (patch.urgentDays !== undefined && !(Number.isInteger(patch.urgentDays) && patch.urgentDays >= 1 && patch.urgentDays <= 60)) throw bad('긴급 기준은 1~60일');
     if (patch.holdCapDays !== undefined && !(Number.isInteger(patch.holdCapDays) && patch.holdCapDays >= 0 && patch.holdCapDays <= 30)) throw bad('1차 보류 상한은 0~30일');
     if (patch.alertPlan !== undefined && !Object.hasOwn(ALERT_PLANS, patch.alertPlan)) throw bad(`알 수 없는 알림 계획표: ${String(patch.alertPlan)}`);
+    if (patch.showExtended !== undefined && typeof patch.showExtended !== 'boolean') throw bad('showExtended는 켬/끔이어야 합니다');
+    if (patch.returnReasons !== undefined) {
+      for (const [k, v] of Object.entries(patch.returnReasons)) {
+        if (!RETURN_REASONS.includes(k as ReturnReason)) throw bad(`알 수 없는 반려 사유: ${k}`);
+        if (typeof v !== 'boolean') throw bad(`반려 사유 ${k}는 켬/끔이어야 합니다`);
+      }
+    }
     const cur = await this.getConfig();
-    await this.repo.setSetting('config', { ...cur, ...patch });
+    await this.repo.setSetting('config', { ...cur, ...patch, returnReasons: { ...cur.returnReasons, ...(patch.returnReasons ?? {}) } });
     // 계획표를 바꾼 날을 기록한다: 비소급 계획은 이 날 이전에 지난 단계를 만들지 않는다.
     if (patch.alertPlan !== undefined && patch.alertPlan !== cur.alertPlan) {
       await this.repo.setSetting('alertPlanActivatedOn', (await this.getClock()).today);
@@ -509,6 +820,7 @@ export class IntakeService {
         recipients: recipientsFor(row, route, { ready, parallel: review?.parallel === true }),
         simulated: true, planId: plan.id, planVersion: plan.version, ready,
         ...(kind === 'escalation' ? { options: [...ESCALATION_OPTIONS], message: MESSAGE_TEXT.escalation } : {}),
+        ...(kind === 'escalation' && st.caseId === CONTRACT_ID ? { autoRenewWarning: '통보 미완료 시 자동 갱신' } : {}),
       };
       if (await this.repo.insertAlertIfAbsent({ caseId: st.caseId, stage, kind, businessDate: today, payload })) {
         raised.push({ caseId: st.caseId, stage, kind });
@@ -646,7 +958,8 @@ export class IntakeService {
   }
 
   /** 1차 반려: 거절(재상신 가능)과 같다. */
-  async primaryReturn(id: string, actor: Actor): Promise<void> {
+  async primaryReturn(id: string, actor: Actor, reason: string): Promise<void> {
+    requireReason(reason);
     const { st, rv, c } = await this.primaryContext(id, actor);
     const next = transition(st, 'primary_return', actor);
     if (!(await this.repo.transitionState(id, st.status, { status: next, routeLevel: st.routeLevel, updatedBusinessDate: c.clock.today }))) {
@@ -654,7 +967,9 @@ export class IntakeService {
     }
     if (rv.holdRequestId !== null) await this.repo.updateInfoRequest(rv.holdRequestId, { status: 'closed' });
     await this.repo.claimReview(id, { states: ['pending', 'held', 'escalated'] }, { state: 'returned', holdDue: null, holdRequestId: null });
-    await this.log(c, id, actor, 'primary_return');
+    await this.closeOpenRequests(id);
+    await this.log(c, id, actor, 'primary_return', { detail: { reason: reason.trim() } });
+    if (id === CONTRACT_ID) await this.createNotice('reject');
   }
 
   /** 긴급 구간 안에서 상신·재상신하거나 설정을 켜면 시계를 다시 넘기지 않아도 병행 상신을 보낸다. */

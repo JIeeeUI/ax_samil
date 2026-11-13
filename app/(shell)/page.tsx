@@ -3,7 +3,7 @@ import { getService } from '../../src/app/instance.js';
 import type { TodayItem } from '../../src/app/service.js';
 import { ROLE_LABEL } from '../../src/workflow/roles.js';
 import { Badge, Flash, routeTone } from '../components.js';
-import { WHO_DECIDES, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
+import { CHECK_LABEL, WHO_DECIDES, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
 import { currentRole } from '../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,7 @@ function CaseRow({ i, mine, hint }: { i: TodayItem; mine: boolean; hint?: string
         <span className="meta2">{koDate(i.effectiveDeadline)}까지 · {daysLeftText(i.daysLeft)}</span>
         <div className="chips">
           <Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
+          {i.checkLabel && <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge>}
           {serious > 0 && <Badge tone="red">주의 {serious}</Badge>}
         </div>
         {hint && <span className="meta2">{hint}</span>}
@@ -46,6 +47,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <div className="flash flash-warn">
           <strong>{v.breaches.map((b) => `${koDate(b.start)} ~ ${koDate(b.end)}`).join(', ')}</strong>에는 회사 현금이 부족해질 수 있어요.
           이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
+        </div>
+      )}
+      {v.cashComparison.needsFinanceCheck && (
+        <div className="flash flash-warn">
+          <strong>재무 확인 필요</strong>: {v.cashComparison.lines.join(' / ')}
+          <br /><small>{v.cashComparison.unverified.join(' · ')}</small>
         </div>
       )}
       {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}

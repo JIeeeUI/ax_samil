@@ -57,3 +57,19 @@ test('reset restores the initial state after a scenario ran', async () => {
   expect((await svc.getCase('PLAN-001')).events.map((e) => e.action)).toEqual(['received', 'calculated']);
   expect(v.scenario).toBe('baseline');
 });
+
+test('check demo: normal, changed assumptions and missing information', async () => {
+  const svc = await make();
+  const { facts, lines } = await runScenario(svc, 'check');
+  expect(facts.normal).toMatchObject({ campaign: 'CMP-0005', inBreach: '아니오', route: 'MASIL_CEO_GROUP_REPORT', labelBefore: 'ready', labelAfter: 'submitted' });
+  expect(lines.join(' ')).toContain('기안 총액');
+  const base = facts.changeBase as Record<string, { route: string; stillLoss: boolean }>;
+  expect(base['PLAN-001'].route).toBe('CEO_BOARD');
+  expect(base['CONTRACT-INF-001'].route).toBe('CEO_BOARD');
+  expect(facts.changeKept).toMatchObject({ demandOnly: { route: 'CEO_BOARD', stillLoss: true }, arOverdueExcluded: { route: 'CEO_BOARD', breaches: ['2026-07-21~2026-08-28'] } });
+  expect(facts.changeChanged).toMatchObject({ lc45: { route: 'MASIL_CEO_GROUP_REPORT', contractRoute: 'CEO_BOARD', breaches: [] } });
+  const info = facts.infoMissing as Record<string, Record<string, string>>;
+  expect(info.inside).toMatchObject({ asked: '확인 대기', inBreach: '예', route: 'CEO_BOARD', after: '상신 준비 완료' });
+  expect(info.outside).toMatchObject({ inBreach: '아니오', route: 'CEO_BOARD', after: '상신 준비 완료' });
+  expect(lines.join(' ')).toContain('어느 쪽이든 CEO/이사회');
+});

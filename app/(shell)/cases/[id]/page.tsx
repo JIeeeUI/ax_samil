@@ -4,11 +4,12 @@ import { createProvider } from '../../../../src/ai/provider.js';
 import { getService } from '../../../../src/app/instance.js';
 import { canChangeContract, defaultOwnerFor } from '../../../../src/workflow/ownership.js';
 import { decisionRole, ROLES, ROLE_LABEL } from '../../../../src/workflow/roles.js';
+import { RETURN_REASONS, RETURN_REASON_LABEL } from '../../../../src/workflow/schedule.js';
 import {
-  actClose, actConfirmFinance, actDecide, actPrimary, actProposeChange, actResubmit, actSubmit,
+  actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actRecordNotice, actResubmit, actRevisionReply, actSendNotice, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
-import { FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
+import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,8 @@ export default async function CasePage({
   const step = nextStep(i, role);
   const at = flowIndex(i.status);
   const hidden = <><input type="hidden" name="id" value={id} /><input type="hidden" name="back" value={back} /></>;
+  const cfg = await svc.getConfig();
+  const md = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
   const openReqs = d.requests.filter((q) => q.status === 'requested');
   return (
     <>
@@ -43,14 +46,19 @@ export default async function CasePage({
 
       <div className="cols"><div className="col">
 
+      <section className="card-block">
+        <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
+        <ol className="plain">{d.check.lines.map((l) => <li key={l}>{l}</li>)}</ol>
+        <p className="meta">점검은 계산·판정·초안까지만 해요. 상신과 승인은 사람이 하고, 상신하면 되돌릴 수 없어요.</p>
+      </section>
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<button type="submit">재무 확인 완료</button></form>}
-          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed || !(cfg.showExtended || d.revisions.length > 0) ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed && (cfg.showExtended || d.revisions.length > 0)} /><button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있어요(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 돼요.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
               <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="approve" /><button type="submit">승인</button></form>
-              <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><button type="submit" className="danger">거절</button></form>
+              <form action={actDecide}>{hidden}<input type="hidden" name="decision" value="reject" /><input name="rejectReason" placeholder="거절 사유(필수)" required /><button type="submit" className="danger">거절</button></form>
             </div>
           )}
           {i.status === 'rejected' && role === 'marketing' && (
@@ -68,6 +76,76 @@ export default async function CasePage({
           </form>
         </details>
       )}
+      {!cfg.showExtended && (i.status === 'revision' || i.status === 'consulting' || d.notice?.status === 'open' || d.notice?.status === 'sent') && (
+        <div className="flash flash-warn"><strong>확장 기능에서 처리 중</strong> 이 건은 결재 이후 기능(재무 반려·협의·통보 작업)에서 처리하고 있어요. 이어서 하려면 <Link href="/settings">설정</Link>에서 “확장 기능(결재 이후) 보기”를 켜세요. 확인 요청은 <Link href="/requests">확인 요청</Link>에서 그대로 답할 수 있어요.</div>
+      )}
+      {cfg.showExtended && i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
+        <details className="fold"><summary>문제가 있으면 마케팅에 되돌리기(반려)</summary>
+          <form action={actFinanceReturn} className="hold">{hidden}
+            <p className="meta">사유를 고르세요. 엔진 결과에 해당하는 칸은 미리 체크해 두었어요. 마케팅은 {koDate(d.returnState.dueIfReturnedToday)}까지 답해야 하고, 반려는 한 번만 할 수 있어요.</p>
+            {RETURN_REASONS.filter((k) => cfg.returnReasons[k]).map((k) => (
+              <label key={k}><input type="checkbox" name="reasons" value={k} defaultChecked={d.returnHints.includes(k)} /> {RETURN_REASON_LABEL[k]}</label>
+            ))}
+            <label>기타 사유(기타를 고른 경우 필수) <input name="otherText" /></label>
+            <label>재무 의견(필수) <input name="opinion" required /></label>
+            <button type="submit" className="secondary">마케팅에 되돌리기</button>
+          </form>
+        </details>
+      ) : <p className="meta">{d.returnState.why}</p>)}
+      {d.cashComparison.needsFinanceCheck && <div className="flash flash-warn"><strong>재무 확인 필요(공식 현금 전망과 차이)</strong> {d.cashComparison.lines.join(' / ')}<br /><small>{d.cashComparison.unverified.join(' · ')}</small></div>}
+      {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
+      {cfg.showExtended && d.notice && d.notice.status !== 'void' && (
+        <section className="card-block">
+          <h2>에이전시 통보 <small>(발송은 마케팅, 기록은 계약 담당 · 교육용 가정)</small></h2>
+          <p>{{ terminate: '해지 통보', change: '조건 변경 통보', renew_confirm: '갱신 확정 기록' }[d.notice.kind]}{d.notice.required ? ' (필수)' : ' (통보 불요: 기록만)'} · 통보 기한 {koDate(d.notice.dueDate)} · <Badge tone={d.notice.status === 'done' ? 'green' : 'amber'}>{{ open: '미완료', sent: '발송됨(기록 대기)', done: '완료', void: '취소' }[d.notice.status]}</Badge></p>
+          {d.notice.sentDate && <p className="meta">발송일 {koDate(d.notice.sentDate)}{d.notice.sentDate > d.notice.dueDate ? ' (통보 기한 이후)' : ''} · 모의 입력</p>}
+          {d.notice.status === 'done' && <p className="meta">{koDate(d.notice.recordedDate ?? '')} 기록 · 수령 증빙 {d.notice.receiptProof ? '있음' : '없음'} · 모의 입력</p>}
+          {d.notice.required && d.notice.status === 'open' && role === 'marketing' && (
+            <form action={actSendNotice} className="hold">{hidden}<input type="hidden" name="kind" value={d.notice.kind} />
+              <label>발송일 <input type="date" name="sentDate" required /></label>
+              <button type="submit">통보 발송했어요(모의)</button></form>
+          )}
+          {(d.notice.status === 'sent' || (!d.notice.required && d.notice.status === 'open')) && role === 'contract' && (
+            <form action={actRecordNotice} className="hold">{hidden}
+              <label>수령 증빙 <select name="receiptProof" defaultValue="no"><option value="yes">있음</option><option value="no">없음</option></select></label>
+              <button type="submit">기록 완료(모의)</button></form>
+          )}
+        </section>
+      )}
+      {cfg.showExtended && d.adjustments.length > 0 && (
+        <div className="flash flash-warn"><strong>마케팅이 조정한 내용</strong>
+          <ul className="reqs">{d.adjustments.map((a, n) => (
+            <li key={n}>{a.field === 'settlementDate' ? `집행일 ${md(String(a.from))}→${md(String(a.to))} 조정됨` : `요청액 ${shortWon(Number(a.from))}→${shortWon(Number(a.to))} 조정됨`} <small>({koDate(a.date)})</small></li>
+          ))}</ul>
+        </div>
+      )}
+      {cfg.showExtended && d.revisions.length > 0 && (
+        <section className="card-block">
+          <h2>재무 반려(보완 요청)</h2>
+          {d.revisions.map((rv) => (
+            <div key={rv.id}>
+              <p><strong>{koDate(rv.returnDate)} 반려</strong> · 사유: {rv.reasons.map((x) => RETURN_REASON_LABEL[x as keyof typeof RETURN_REASON_LABEL] ?? x).join(', ')}{rv.otherText ? ` (${rv.otherText})` : ''}</p>
+              <p>재무 의견: {rv.opinion}</p>
+              <p className="meta">{{ open: `회신 기한 ${koDate(rv.dueDate)}`, adjusted: '마케팅이 조정함', kept: '마케팅: 변경 없음(재무 의견을 붙여 상신)', consult: '마케팅: 협의 필요', unanswered: '미응답: 재무 의견을 붙여 결재자에게 자동 전달됨' }[rv.status]}{rv.replyText ? ` · 답변: ${rv.replyText}` : ''}</p>
+            </div>
+          ))}
+          {i.status === 'revision' && role === 'marketing' && (
+            <form action={actRevisionReply} className="hold">{hidden}
+              <label>어떻게 하시겠어요?
+                <select name="kind" defaultValue={i.kind === 'plan' ? 'adjust' : 'keep'}>
+                  {i.kind === 'plan' && <option value="adjust">조정함(집행일·요청액 바꾸기)</option>}
+                  <option value="keep">변경 없음(재무 의견을 붙여 상신)</option>
+                  <option value="consult">협의 필요</option>
+                </select></label>
+              <label>바꿀 집행일(조정할 때) <input type="date" name="settlementDate" defaultValue={i.settlementDate || undefined} /></label>
+              <label>바꿀 요청액(원, 조정할 때) <input name="amount" inputMode="numeric" placeholder={String(i.amount)} /></label>
+              <label>답변(필수) <input name="text" required /></label>
+              <button type="submit">답변 보내기</button>
+            </form>
+          )}
+        </section>
+      )}
+      {d.rejection && <div className="flash flash-warn"><strong>거절 사유</strong>: {d.rejection.reason} <small>({ROLE_LABEL[d.rejection.actor as keyof typeof ROLE_LABEL] ?? d.rejection.actor} · {koDate(d.rejection.date)})</small></div>}
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
       {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
 
@@ -87,7 +165,7 @@ export default async function CasePage({
             <>
               <div className="two">
                 <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="escalate" /><button type="submit">검토 마치고 CEO/이사회에 올리기</button></form>
-                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="return" /><button type="submit" className="danger">반려</button></form>
+                <form action={actPrimary}>{hidden}<input type="hidden" name="op" value="return" /><input name="rejectReason" placeholder="반려 사유(필수)" required /><button type="submit" className="danger">반려</button></form>
               </div>
               {d.review.state === 'pending' && (d.review.canHold ? (
                 <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>

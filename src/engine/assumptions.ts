@@ -5,7 +5,7 @@ export type Label = 'confirmed' | 'benchmark' | 'assumption';
 
 export type ScenarioId = 'baseline' | 'arOverdueExcluded' | 'apOverdueExcluded' | 'bothOverdueExcluded' | 'lc45';
 
-type LabeledField = 'unitsPerOrder' | 'channelFeeBasis' | 'recoverCostOnRefund' | 'calcMode' | 'overdueAr' | 'overdueAp' | 'lc0001TermsDays';
+type LabeledField = 'unitsPerOrder' | 'channelFeeBasis' | 'recoverCostOnRefund' | 'calcMode' | 'overdueAr' | 'overdueAp' | 'lc0001TermsDays' | 'returnAttribution';
 
 export interface AssumptionSet {
   id: ScenarioId;
@@ -24,6 +24,11 @@ export interface AssumptionSet {
   overdueAp: 'asof' | 'exclude';
   /** LC-0001 결제조건 (통보서 90일, 재무 공식 전망 가정 45일) */
   lc0001TermsDays: 90 | 45;
+  /**
+   * 반품 원인 분리 보기. 'all'(기본) = 모든 반품을 인플루언서 성과에 반영.
+   * 'demandOnly' = 오배송·불량 반품의 환불액과 반품 물류비를 인플루언서 성과에서 제외(평가용 보기, 회사 손익은 그대로).
+   */
+  returnAttribution: 'all' | 'demandOnly';
   asOf: IsoDate;
   labels: Record<LabeledField, Label>;
 }
@@ -38,6 +43,7 @@ const BASE: AssumptionSet = {
   overdueAr: 'asof',
   overdueAp: 'asof',
   lc0001TermsDays: 90,
+  returnAttribution: 'all',
   asOf: '2026-07-01',
   labels: {
     unitsPerOrder: 'assumption',
@@ -47,6 +53,8 @@ const BASE: AssumptionSet = {
     overdueAr: 'assumption',
     overdueAp: 'assumption',
     lc0001TermsDays: 'confirmed',
+    // [가정: 오배송·불량은 인플루언서 책임이 아니라는 해석]
+    returnAttribution: 'assumption',
   },
 };
 
@@ -59,6 +67,9 @@ export const SCENARIOS: Record<ScenarioId, AssumptionSet> = {
 };
 
 export const DEFAULT_ASSUMPTIONS = SCENARIOS.baseline;
+
+/** 반품 원인 분리 보기(인플루언서 평가용). 가정 세트가 아니라 점검 결과에 별도 숫자로만 쓰고 판정·승인 경로에는 쓰지 않는다. */
+export const DEMAND_ONLY_VIEW: AssumptionSet = { ...BASE, returnAttribution: 'demandOnly' };
 
 export const THRESHOLDS = {
   perItemKrw: 10_000_000,

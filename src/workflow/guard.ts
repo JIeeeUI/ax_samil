@@ -21,7 +21,7 @@ export function stagesDue(today: IsoDate, effectiveDeadline: IsoDate): Stage[] {
 /** D-3 이후 결재자에게 제시하는 선택지 (조건 변경 통보 / 해지 통보 / 상신 후 승인) */
 export const ESCALATION_OPTIONS = ['change_terms_notice', 'termination_notice', 'submit_then_approve'] as const;
 
-const UNDECIDED: ReadonlySet<Status> = new Set<Status>(['finance_review', 'routed', 'submitted', 'on_hold']);
+const UNDECIDED: ReadonlySet<Status> = new Set<Status>(['finance_review', 'routed', 'submitted', 'on_hold', 'revision', 'consulting']);
 
 /** 결정 전 상태면 D-3 이후 상위 결재자에게 올린다. */
 export const needsEscalation = (status: Status): boolean => UNDECIDED.has(status);

@@ -49,6 +49,33 @@ create table if not exists review1 (
   hold_due text,
   hold_request_id integer
 );
+create table if not exists revisions (
+  id integer generated always as identity primary key,
+  case_id text not null,
+  round integer not null,
+  reasons jsonb not null,
+  other_text text,
+  opinion text not null,
+  return_date text not null,
+  due_date text not null,
+  status text not null default 'open',
+  reply_text text,
+  replied_date text
+);
+create table if not exists notices (
+  case_id text primary key,
+  kind text not null,
+  required boolean not null,
+  due_date text not null,
+  created_date text not null,
+  status text not null default 'open',
+  sent_date text,
+  sent_by text,
+  receipt_proof boolean,
+  recorded_date text,
+  recorded_by text,
+  simulated boolean not null default true
+);
 create table if not exists alerts (
   case_id text not null,
   stage text not null,

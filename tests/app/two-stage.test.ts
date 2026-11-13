@@ -22,7 +22,7 @@ const actions = async (svc: IntakeService, id = CONTRACT) => (await svc.getCase(
 // ---------- 1차/2차 결재 ----------
 test('default config: two-stage off, urgent 10 days, hold cap 3 days, plan current; no review block', async () => {
   const { svc } = await make();
-  expect(await svc.getConfig()).toEqual({ twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current' });
+  expect(await svc.getConfig()).toMatchObject({ twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current' });
   await submitContract(svc);
   expect((await svc.getCase(CONTRACT)).review).toBeNull();
   await svc.decide(CONTRACT, 'ceo_board', 'approve'); // 기존 1단계 흐름 그대로
@@ -105,9 +105,11 @@ test('urgent (10 days or fewer): a pending or held 1st stage triggers a parallel
 test('1st-stage return is a rejection that can be resubmitted and starts the 1st stage again', async () => {
   const { svc } = await make({ twoStage: true });
   await submitContract(svc);
-  await svc.primaryReturn(CONTRACT, 'masil_ceo');
+  await svc.primaryReturn(CONTRACT, 'masil_ceo', '테스트 사유');
   expect((await svc.getCase(CONTRACT)).item.status).toBe('rejected');
   await svc.resubmit(CONTRACT, 'marketing');
+  expect((await svc.getCase(CONTRACT)).item.status).toBe('finance_review');
+  await submitContract(svc);
   const d = await svc.getCase(CONTRACT);
   expect(d.item.status).toBe('submitted');
   expect(d.review).toMatchObject({ state: 'pending', parallel: false });

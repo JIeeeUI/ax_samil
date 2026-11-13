@@ -1,7 +1,8 @@
 import { SCENARIOS, THRESHOLDS } from '../../../src/engine/assumptions.js';
 import { getService } from '../../../src/app/instance.js';
-import { actAdvanceClock, actReset, actSetConfig, actSetScenario } from '../../actions.js';
+import { actAdvanceClock, actReset, actSetConfig, actSetReturnReasons, actSetScenario } from '../../actions.js';
 import { ALERT_PLANS, MESSAGE_TEXT } from '../../../src/workflow/alertPlan.js';
+import { RETURN_REASONS, RETURN_REASON_LABEL, SCHEDULE } from '../../../src/workflow/schedule.js';
 import { ROLE_LABEL } from '../../../src/workflow/roles.js';
 import { Badge, Flash, LABEL_KO, SCENARIO_LABEL, won } from '../../components.js';
 
@@ -15,7 +16,7 @@ const SCENARIO_WHY: Record<string, string> = {
   lc45: 'LC-0001 대금을 45일 뒤에 받는다고 가정합니다. 재무팀 공식 전망이 왜 다른지 설명할 때만 쓰는 점검용이에요(확인된 조건은 90일).',
 };
 const FIELD_KO: Record<string, string> = {
-  unitsPerOrder: '주문 1건당 판매 수량', channelFeeBasis: '판매 채널 수수료 기준', recoverCostOnRefund: '환불되면 원가·수수료를 돌려받는지',
+  returnAttribution: '반품을 인플루언서 성과에 반영하는 범위', unitsPerOrder: '주문 1건당 판매 수량', channelFeeBasis: '판매 채널 수수료 기준', recoverCostOnRefund: '환불되면 원가·수수료를 돌려받는지',
   calcMode: '이익 계산 방식', overdueAr: '기준일 전 연체 외상매출', overdueAp: '기준일 전 연체 외상매입', lc0001TermsDays: 'LC-0001 대금 회수일(일)',
 };
 const THRESHOLD_KO: Record<string, string> = {
@@ -56,6 +57,16 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       </section>
 
       <section className="card-block">
+        <h2>확장 기능(결재 이후) 보기</h2>
+        <p>이 도구의 중심은 상신 전 점검이에요. 결재 이후 기능(재무 반려·마케팅 회신·통보 작업·1차/2차 결재·알림 계획표)은 구현돼 있지만 기본으로 숨겨져 있어요. 켜면 화면에 나타납니다.</p>
+        <form action={actSetConfig} className="hold">{hidden}
+          <label>확장 기능 보기 <select name="showExtended" defaultValue={cfg.showExtended ? 'on' : 'off'}><option value="off">끄기(기본)</option><option value="on">켜기</option></select></label>
+          <button type="submit">저장</button>
+        </form>
+      </section>
+
+      {cfg.showExtended && (<>
+      <section className="card-block">
         <h2>결재·알림 설정 <Badge tone="amber">가정</Badge></h2>
         <p>교육용으로 정한 값이에요. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>이에요.</p>
         <form action={actSetConfig} className="hold">{hidden}
@@ -78,6 +89,26 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </tbody></table>
         {plan.holdOverdueWarning && <p className="meta">1차 보류가 자기 기한을 넘기면 즉시 대표·CEO에게 경고합니다.</p>}
       </section>
+
+      <section className="card-block">
+        <h2>재무 반려 사유·역산 일정 <Badge tone="amber">가정</Badge></h2>
+        <p>재무팀이 마케팅에 되돌릴 때(반려) 고를 수 있는 사유예요. 끄면 선택지에서 사라집니다.</p>
+        <form action={actSetReturnReasons} className="hold">{hidden}
+          {RETURN_REASONS.map((k) => <label key={k}><input type="checkbox" name={`rr_${k}`} defaultChecked={cfg.returnReasons[k]} /> {RETURN_REASON_LABEL[k]}</label>)}
+          <button type="submit">반려 사유 저장</button>
+        </form>
+        <h3>시간 규칙은 하나의 원칙: 결정 기한에서 거꾸로 센다</h3>
+        <ul className="plain">
+          <li><strong>결재자 몫</strong>: 결정 기한 3일 전 ~ 당일 (그래서 1차 보류는 기한 {SCHEDULE.approverDays}일 전까지만)</li>
+          <li><strong>재무 재확인 몫</strong>: 기한 5일 전 ~ 3일 전</li>
+          <li><strong>마케팅·협의 몫</strong>: 기한 5일 전 이전</li>
+          <li>반려 회신 기한 = 반려일 + 3일과 (결정 기한 − 5일) 중 이른 날</li>
+          <li>결정 기한까지 5일 이하이면 반려하지 않고 재무 의견을 붙여 바로 상신 · 반려는 건당 한 번(왕복 1회)</li>
+          <li>회신 기한까지 답이 없으면 “미응답”으로 표시하고 재무 의견을 붙여 결재자에게 자동 전달(결정이 아니라 전달)</li>
+        </ul>
+        <p className="meta">기존 값(알림 D-14/7/3, 긴급 10일, 확인 요청 +3일)은 그대로예요.</p>
+      </section>
+      </>)}
 
       <h2>가정을 바꿔 보기</h2>
       <p>현금 계산에는 자료에 없어서 정한 가정이 들어 있어요. 가정을 바꾸면 현금이 부족해지는 기간이 달라지고, 그에 따라 <strong>누가 승인해야 하는지</strong>도 달라질 수 있습니다. 아직 끝나지 않은 건만 다시 계산돼요.</p>

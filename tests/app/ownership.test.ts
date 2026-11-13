@@ -74,22 +74,22 @@ test('after a rejection only marketing may resubmit or close; finance is refused
   const plan = (await svc.listToday()).items.find((i) => i.kind === 'plan' && i.routeLevel === 'MASIL_CEO_GROUP_REPORT')!.id;
   await svc.confirmFinance(plan, 'finance');
   await svc.submit(plan, 'marketing');
-  await svc.decide(plan, 'masil_ceo', 'reject');
+  await svc.decide(plan, 'masil_ceo', { reject: { reason: '테스트 사유' } });
   await expect(svc.resubmit(plan, 'finance')).rejects.toThrow(/ROLE_NOT_ALLOWED/);
   await expect(svc.close(plan, 'finance')).rejects.toThrow(/ROLE_NOT_ALLOWED/);
   expect((await svc.getCase(plan)).item.status).toBe('rejected');
   await svc.resubmit(plan, 'marketing');
-  expect((await svc.getCase(plan)).item.status).toBe('submitted');
+  expect((await svc.getCase(plan)).item.status).toBe('finance_review'); // 재무 확인부터 다시
 });
 
 test('a 1st-stage return is the same rejection: finance refused, marketing may resubmit', async () => {
   const { svc } = await make({ twoStage: true });
   await svc.confirmFinance(CONTRACT, 'finance');
   await svc.submit(CONTRACT, 'marketing');
-  await svc.primaryReturn(CONTRACT, 'masil_ceo');
+  await svc.primaryReturn(CONTRACT, 'masil_ceo', '테스트 사유');
   await expect(svc.resubmit(CONTRACT, 'finance')).rejects.toThrow(/ROLE_NOT_ALLOWED/);
   await svc.resubmit(CONTRACT, 'marketing');
-  expect((await svc.getCase(CONTRACT)).item.status).toBe('submitted');
+  expect((await svc.getCase(CONTRACT)).item.status).toBe('finance_review');
 });
 
 test('the hold form pre-fills the owner from the topic and keeps an explicit choice', () => {
@@ -120,7 +120,7 @@ test('after a rejection finance sees a re-check notice, marketing sees its turn'
   const plan = (await svc.listToday()).items.find((i) => i.kind === 'plan' && i.routeLevel === 'MASIL_CEO_GROUP_REPORT')!.id;
   await svc.confirmFinance(plan, 'finance');
   await svc.submit(plan, 'marketing');
-  await svc.decide(plan, 'masil_ceo', 'reject');
+  await svc.decide(plan, 'masil_ceo', { reject: { reason: '테스트 사유' } });
   const item = (await svc.listToday()).items.find((i) => i.id === plan)!;
   expect(nextStep(item, 'marketing').kind).toBe('mine');
   const fin = nextStep(item, 'finance');
