@@ -101,3 +101,11 @@ export const NEEDED_PLAIN: Record<string, string> = {
   performance_fee_terms: '성과 피 조건(포함하면 연 10억 원을 넘는지)',
 };
 export const neededLabel = (needed: string) => NEEDED_PLAIN[needed] ?? needed;
+
+/** 카드 안에서 한 줄에 들어가도록 줄인 '누가 결정하나' 이름 */
+export const WHO_SHORT: Record<string, string> = {
+  CEO_BOARD: 'CEO/이사회',
+  MASIL_CEO_GROUP_REPORT: '대표 + 그룹 보고',
+  MASIL_CEO: 'Masil 대표',
+  MARKETING: '마케팅 전결',
+};
