@@ -47,8 +47,8 @@ export default async function CasePage({
       <div className="cols"><div className="col">
 
       <section className="card-block">
-        <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
-        <ol className="plain">{d.check.lines.map((l) => { const [head, ...rest] = l.split(/;s+/); return <li key={l}><span className="l1">{head}</span>{rest.map((r) => <span key={r} className="more">{r}</span>)}</li>; })}</ol>
+        <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : d.check.label === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
+        <ol className="plain">{d.check.lines.map((l) => { const [head, ...rest] = l.split(/;\s+/); return <li key={l}><span className="l1">{head}</span>{rest.map((r) => <span key={r} className="more">{r}</span>)}</li>; })}</ol>
         <p className="meta">점검은 계산·판정·초안까지만 해요. 상신과 승인은 사람이 하고, 상신하면 되돌릴 수 없어요.</p>
       </section>
       {step.kind === 'mine' && (

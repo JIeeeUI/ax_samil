@@ -61,7 +61,7 @@ test('reset restores the initial state after a scenario ran', async () => {
 test('check demo: normal, changed assumptions and missing information', async () => {
   const svc = await make();
   const { facts, lines } = await runScenario(svc, 'check');
-  expect(facts.normal).toMatchObject({ campaign: 'CMP-0005', inBreach: '아니오', route: 'MASIL_CEO_GROUP_REPORT', labelBefore: 'ready', labelAfter: 'submitted' });
+  expect(facts.normal).toMatchObject({ campaign: 'CMP-0005', inBreach: '아니오', route: 'MASIL_CEO_GROUP_REPORT', labelBefore: 'finance_pending', labelAfterFinance: 'ready', labelAfter: 'submitted' });
   expect(lines.join(' ')).toContain('기안 총액');
   const base = facts.changeBase as Record<string, { route: string; stillLoss: boolean }>;
   expect(base['PLAN-001'].route).toBe('CEO_BOARD');

@@ -21,7 +21,7 @@ export interface ContractOverrides { annualFixedFeeKrw?: number; cashOutflowDate
 export type Actor = Role | 'system';
 export type Decision = 'approve' | { reject: { reason: string } } | { hold: HoldInput };
 /** 상신 전 점검 구간 라벨(상태 기계는 그대로, 상태와 열린 확인 요청에서 파생) */
-export type CheckLabel = 'waiting_info' | 'ready' | 'submitted';
+export type CheckLabel = 'waiting_info' | 'finance_pending' | 'ready' | 'submitted';
 export interface CheckResult {
   label: CheckLabel | null;
   /** ① 누구 승인(이유) ② 실효 결정 기한·남은 일수·철회 불가 ③ 근거 ④ 빠진 정보와 물어볼 곳 */
@@ -105,11 +105,12 @@ function adjustmentsFrom(events: EventRow[]): AdjustmentRecord[] {
   return events.filter((e) => e.action === 'adjust').flatMap((e) => ((e.detail as { changes?: AdjustmentRecord[] } | null)?.changes ?? []));
 }
 
-/** 상신 전 점검 라벨: 열린 확인 요청이나 빠진 정보가 있으면 확인 대기, 상신 전이고 막힘이 없으면 상신 준비 완료, 상신 이후는 상신함 */
+/** 상신 전 점검 라벨: 열린 확인 요청이나 빠진 정보가 있으면 확인 대기, 막힘이 없지만 재무 확인 전(finance_review)이면 재무 확인 대기, 재무 확인이 끝나(routed) 상신할 수 있으면 상신 준비 완료, 상신 이후는 상신함 */
 function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boolean): CheckLabel | null {
   if (status === 'revision' || status === 'consulting' || status === 'overdue' || status === 'closed') return null;
   if (hasOpenRequest) return 'waiting_info';
-  if (status === 'finance_review' || status === 'routed') return missingInfo ? 'waiting_info' : 'ready';
+  if (status === 'finance_review') return missingInfo ? 'waiting_info' : 'finance_pending'; // 점검 통과, 재무 확인 대기
+  if (status === 'routed') return missingInfo ? 'waiting_info' : 'ready'; // 재무 확인이 끝나 상신할 수 있음
   return 'submitted';
 }
 
@@ -435,7 +436,7 @@ export class IntakeService {
         `① ${ROUTE_LABEL[item.routeLevel]} 승인 필요 — ${route.reasons.join(' / ')}${item.provisional ? ' (잠정)' : ''}`,
         `② 실효 결정 기한 ${item.effectiveDeadline}, 남은 ${item.daysLeft}일. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
         `③ ${unit} 성과 명목 ROAS ${f2(nominal)} vs 실질 ROAS ${f2(real)}${real !== null && real < 0 ? '(광고비를 빼면 손해)' : ''}; 반품 원인 분리 보기[가정: 오배송·불량은 인플루언서 책임이 아님] 실질 ${f2(realD)}${stillLoss === true ? '(여전히 손실, 회사 손익은 그대로)' : ''}; ${gap.lines.join(', ')}${gap.needsFinanceCheck ? ' → 재무 확인 필요' : ''}`,
-        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}`,
+        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}${item.checkLabel === 'finance_pending' ? ' — 점검은 통과했어요. 재무팀이 같은 점검표로 금액을 확인한 뒤 상신할 수 있어요.' : ''}`,
       ],
       evidence: {
         nominalRoas: nominal, realRoas: real, realRoasDemandOnly: realD,

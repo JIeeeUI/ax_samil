@@ -150,7 +150,7 @@ const WON_EOK = (n: number) => `${(Math.round((n / 100_000_000) * 100) / 100).to
  */
 async function runCheck(svc: IntakeService, say: (s: string) => void, facts: Record<string, unknown>): Promise<void> {
   const label = async (id: string) => (await svc.listToday()).items.find((i) => i.id === id)!.checkLabel;
-  const LABEL_KO = { waiting_info: '확인 대기', ready: '상신 준비 완료', submitted: '상신함' } as const;
+  const LABEL_KO = { waiting_info: '확인 대기', finance_pending: '재무 확인 대기', ready: '상신 준비 완료', submitted: '상신함' } as const;
   const lab = async (id: string) => { const l = await label(id); return l ? LABEL_KO[l] : '-'; };
   const show = async (id: string) => { for (const l of (await svc.getCase(id)).check.lines) say(`  ${l}`); };
 
@@ -163,9 +163,11 @@ async function runCheck(svc: IntakeService, say: (s: string) => void, facts: Rec
     realRoas: p19.check.evidence.realRoas, labelBefore: await label('PLAN-019'),
   };
   await show('PLAN-019');
-  say(`  → 점검 결과: ${await lab('PLAN-019')}`);
-  await svc.confirmFinance('PLAN-019', 'finance'); // 기존 상태 기계: 재무 확인 → 상신 가능
-  say('  (재무 확인 완료 후 마케팅이 확인 칸을 체크하고 상신 버튼을 누름: 상신은 사람이 하고 되돌릴 수 없음)');
+  say(`  → 점검 결과: 점검 통과, ${await lab('PLAN-019')}`);
+  await svc.confirmFinance('PLAN-019', 'finance'); // 기존 상태 기계: 재무가 같은 점검표로 금액 확인 → 상신 가능
+  (facts.normal as Record<string, unknown>).labelAfterFinance = await label('PLAN-019');
+  say(`  → 재무 확인 후: ${await lab('PLAN-019')}`);
+  say('  (마케팅이 확인 칸을 체크하고 상신 버튼을 누름: 상신은 사람이 하고 되돌릴 수 없음)');
   await svc.submit('PLAN-019', 'marketing');
   const after = await svc.getCase('PLAN-019');
   (facts.normal as Record<string, unknown>).labelAfter = await label('PLAN-019');
@@ -223,6 +225,6 @@ async function runCheck(svc: IntakeService, say: (s: string) => void, facts: Rec
   say(`  점검 ${inside.before} → 재무 확인 요청(${inside.owner}, ${inside.needed}) → ${inside.asked} → 모의 회신 2026-08-10: 하회 구간 ${inside.inBreach}, 경로 ${inside.route}, 점검 ${inside.after}`);
   const outside = await infoRun('2026-09-30');
   say(`  점검 ${outside.before} → 재무 확인 요청 → ${outside.asked} → 모의 회신 2026-09-30: 하회 구간 ${outside.inBreach}, 경로 ${outside.route}, 점검 ${outside.after}`);
-  say('  주의: 28억은 어느 쪽이든 CEO/이사회 결정입니다. 회신이 바꾸는 것은 하회 구간 해당 여부와 상태(확인 대기 → 상신 준비 완료)이지 결재자가 아닙니다.');
+  say('  주의: 28억은 어느 쪽이든 CEO/이사회 결정입니다. 회신이 바꾸는 것은 하회 구간 해당 여부와 상태(확인 대기 → 재무 확인 전이면 재무 확인 대기, 확인 후면 상신 준비 완료. 이 시연은 재무 확인 뒤 회신하므로 상신 준비 완료)이지 결재자가 아닙니다.');
   facts.infoMissing = { inside, outside };
 }
