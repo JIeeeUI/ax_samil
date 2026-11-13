@@ -293,3 +293,46 @@ details.fold:has(> summary:focus-visible) { outline: 3px solid var(--forest); ou
 .cta form { display: flex; flex-direction: column; gap: 12px; }
 form > input:not([type='hidden']) + button { margin-top: 12px; }
 .cta form > input:not([type='hidden']) + button { margin-top: 0; }
+
+/* ---- 3차 다듬기: 구역·라벨 구조 ---- */
+/* 상신 전 점검 네 줄: 이름표 + 핵심 한 줄 */
+ol.checklist { list-style: none; margin: 10px 0 0; padding: 0; }
+ol.checklist > li { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+ol.checklist > li:last-child { border-bottom: 0; }
+.ck { flex: none; min-width: 5.2em; text-align: center; padding: 3px 10px; border-radius: 999px; background: var(--mint-soft); color: var(--forest-text); font-size: 0.8rem; font-weight: 700; margin-top: 2px; }
+.cv { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cv strong { font-weight: 600; }
+.cs { color: var(--muted); font-size: 0.93rem; }
+details.more > summary { cursor: pointer; color: var(--forest-text); font-size: 0.85rem; font-weight: 600; list-style: none; }
+details.more > summary::after { content: ' ＋'; }
+details.more[open] > summary::after { content: ' －'; }
+details.more > p { margin: 6px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* 재무 확인 필요 상자: 핵심 두 줄 + 접힌 이유 */
+.cashnote ul.short { margin: 8px 0 6px; padding-left: 0; list-style: none; }
+.cashnote ul.short li { margin: 2px 0; padding-left: 14px; position: relative; }
+.cashnote ul.short li::before { content: ''; position: absolute; left: 0; top: 0.7em; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.cashnote details.more > summary { color: inherit; }
+.cashnote details.more > p { color: inherit; }
+
+/* 확인할 점: 항목마다 점(포인트) */
+.facts ul.plain.pts li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; text-indent: 0; padding-left: 0; }
+.pt { flex: none; width: 1.1em; text-align: center; color: var(--forest); font-weight: 700; }
+.pt.warn { color: var(--red); }
+
+/* 정보 목록(금액·결정하는 사람·기한)을 연한 칸으로 감싸 흰 종이에 적은 느낌을 없앤다 */
+section.summary .facts { background: var(--bg); border-radius: 14px; padding: 4px 18px; }
+
+/* 홈 카드: 이름·금액 / 연한 정보 칸 / 안내 */
+.row-card .l { flex: 1; }
+.rc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rc-head .amt { font-weight: 700; font-size: 1.1rem; white-space: nowrap; }
+.rc-panel { margin: 8px 0 4px; padding: 6px 14px; background: var(--bg); border-radius: 14px; }
+.rc-panel > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.rc-panel > div:last-child { border-bottom: 0; }
+.rc-panel dt { margin: 0; color: var(--muted); font-size: 0.85rem; flex: none; }
+.rc-panel dd { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; font-weight: 600; }
+.rc-panel dd small { font-weight: 400; }
+.row-card:hover .rc-panel, .row-card:active .rc-panel { background: var(--card); }
+.facts ul.plain.pts li { justify-content: flex-start; border: 0; text-align: left; font-weight: 500; }
+.facts ul.plain.pts .pt { margin-top: 0; }

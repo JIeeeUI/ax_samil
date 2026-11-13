@@ -9,6 +9,7 @@ import {
   actClose, actConfirmFinance, actDecide, actFinanceReturn, actPrimary, actProposeChange, actRecordNotice, actResubmit, actRevisionReply, actSendNotice, actSubmit,
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
+import { CashNote, CheckList } from '../../../check-ui.js';
 import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, issuePlain, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
 
@@ -48,8 +49,8 @@ export default async function CasePage({
 
       <section className="card-block">
         <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : d.check.label === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
-        <ol className="plain">{d.check.lines.map((l) => { const [head, ...rest] = l.split(/;\s+/); return <li key={l}><span className="l1">{head}</span>{rest.map((r) => <span key={r} className="more">{r}</span>)}</li>; })}</ol>
-        <p className="meta">점검은 계산·판정·초안까지만 해요. 상신과 승인은 사람이 하고, 상신하면 되돌릴 수 없어요.</p>
+        <CheckList lines={d.check.lines} />
+        <p className="meta">점검은 계산·판정까지만 해요. 상신은 사람이 누르고, 되돌릴 수 없어요.</p>
       </section>
       {step.kind === 'mine' && (
         <div className="cta">
@@ -92,7 +93,7 @@ export default async function CasePage({
           </form>
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
-      {d.cashComparison.needsFinanceCheck && <div className="flash flash-warn"><strong>재무 확인 필요(공식 현금 전망과 차이)</strong> {d.cashComparison.lines.join(' / ')}<br /><small>{d.cashComparison.unverified.join(' · ')}</small></div>}
+      {d.cashComparison.needsFinanceCheck && <CashNote lines={d.cashComparison.lines} unverified={d.cashComparison.unverified} />}
       {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
       {cfg.showExtended && d.notice && d.notice.status !== 'void' && (
         <section className="card-block">
@@ -191,7 +192,7 @@ export default async function CasePage({
           <li><span className="k">결정 기한</span><span className="v">{koDate(i.effectiveDeadline)}<small>{daysLeftText(i.daysLeft)}</small></span></li>
           <li><span className="k">확인할 점</span>
             <span className="v">{i.issues.length === 0 ? '없어요' : (
-              <ul className="plain">{i.issues.map((c) => <li key={c}>{issuePlain(c).serious ? '⚠ ' : ''}{issuePlain(c).text}</li>)}</ul>
+              <ul className="plain pts">{i.issues.map((c) => <li key={c}><span className={issuePlain(c).serious ? 'pt warn' : 'pt'} aria-hidden>{issuePlain(c).serious ? '⚠' : '•'}</span>{issuePlain(c).text}</li>)}</ul>
             )}</span></li>
         </ul>
         {i.provisional && <p className="meta">잠정 판정이에요. 성과 피 조건이 확인되면 결정하는 사람이 바뀔 수 있어요.</p>}

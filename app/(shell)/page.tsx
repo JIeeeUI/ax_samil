@@ -3,6 +3,7 @@ import { getService } from '../../src/app/instance.js';
 import type { TodayItem } from '../../src/app/service.js';
 import { ROLE_LABEL } from '../../src/workflow/roles.js';
 import { Badge, Flash, routeTone } from '../components.js';
+import { CashNote } from '../check-ui.js';
 import { CHECK_LABEL, WHO_DECIDES, WHO_SHORT, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
 import { currentRole } from '../session.js';
 
@@ -14,16 +15,20 @@ function CaseRow({ i, mine, hint }: { i: TodayItem; mine: boolean; hint?: string
   return (
     <Link href={`/cases/${i.id}`} className={`row-card${mine ? ' mine' : ''}`}>
       <div className="l">
-        <span className="name">{i.influencer} <small>{i.kind === 'contract' ? '연간 계약' : '캠페인'}</small></span>
-        <span className="meta2">{koDate(i.effectiveDeadline)}까지 · {daysLeftText(i.daysLeft)}</span>
-        <div className="chips">
-          <Badge tone={routeTone(i.routeLevel)}>{WHO_SHORT[i.routeLevel] ?? WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
-          {i.checkLabel && <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : i.checkLabel === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge>}
-          {serious > 0 && <Badge tone="red">주의 {serious}</Badge>}
+        <div className="rc-head">
+          <span className="name">{i.influencer} <small>{i.kind === 'contract' ? '연간 계약' : '캠페인'}</small></span>
+          <span className="amt">{shortWon(i.amount)}</span>
         </div>
+        <dl className="rc-panel">
+          <div><dt>결정 기한</dt><dd>{koDate(i.effectiveDeadline)} <small>{daysLeftText(i.daysLeft)}</small></dd></div>
+          <div><dt>결정하는 사람</dt><dd><Badge tone={routeTone(i.routeLevel)}>{WHO_SHORT[i.routeLevel] ?? WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge></dd></div>
+          <div><dt>점검</dt><dd>
+            {i.checkLabel ? <Badge tone={i.checkLabel === 'ready' ? 'green' : i.checkLabel === 'waiting_info' ? 'amber' : i.checkLabel === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[i.checkLabel]}</Badge> : <small>-</small>}
+            {serious > 0 && <Badge tone="red">⚠ 주의 {serious}</Badge>}
+          </dd></div>
+        </dl>
         {hint && <span className="meta2">{hint}</span>}
       </div>
-      <div className="r"><div className="amt">{shortWon(i.amount)}</div></div>
       <span className="go" aria-hidden>›</span>
     </Link>
   );
@@ -100,12 +105,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           이 기간에 돈이 나가는 건은 금액이 작아도 CEO/이사회가 결정해요.
         </div>
       )}
-      {v.cashComparison.needsFinanceCheck && (
-        <div className="flash flash-warn">
-          <strong>재무 확인 필요</strong>: {v.cashComparison.lines.join(' / ')}
-          <br /><small>{v.cashComparison.unverified.join(' · ')}</small>
-        </div>
-      )}
+      {v.cashComparison.needsFinanceCheck && <CashNote lines={v.cashComparison.lines} unverified={v.cashComparison.unverified} />}
       {v.linkWarnings.map((w) => <div key={w.influencerId} className="flash flash-warn">⚠ {w.message}</div>)}
       {v.openRequests > 0 && (
         <Link href="/requests" className="row-card"><div className="l"><span className="name">답을 기다리는 확인 요청 {v.openRequests}건</span><span className="meta2">눌러서 답변하기</span></div><span className="go" aria-hidden>›</span></Link>
