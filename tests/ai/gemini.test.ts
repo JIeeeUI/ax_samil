@@ -1,5 +1,5 @@
 import { summarizeForApproval } from '../../src/ai/assist.js';
-import { createProvider, DEFAULT_GEMINI_MODEL } from '../../src/ai/provider.js';
+import { createProvider, DEFAULT_GEMINI_MODEL, FALLBACK_GEMINI_MODELS } from '../../src/ai/provider.js';
 import { IntakeService } from '../../src/app/service.js';
 import { loadDataRoom } from '../../src/engine/dataRoom.js';
 import { openDb } from '../../src/store/db.js';
@@ -85,4 +85,48 @@ test('an empty Gemini response is an http_error, not a blank sentence', async ()
   const { f } = mockFetch(() => new Response(JSON.stringify({ candidates: [] }), { status: 200 }));
   const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
   expect(r).toMatchObject({ source: 'fallback', error: 'http_error' });
+});
+
+test('a busy model (503) is retried with the next free flash model and the answer is used', async () => {
+  const d = await detail();
+  let n = 0;
+  const { f, seen } = mockFetch(() => (++n === 1
+    ? new Response('{"error":{"code":503,"status":"UNAVAILABLE"}}', { status: 503 })
+    : new Response(geminiBody('전속계약 연 280,000만 원은 10억 원을 넘어 CEO/이사회 상신 대상입니다.'), { status: 200 })));
+  const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
+  expect(r).toMatchObject({ source: 'ai', note: '' });
+  expect(seen).toHaveLength(2);
+  expect(seen[0].url).toContain(`/models/${DEFAULT_GEMINI_MODEL}:`);
+  expect(seen[1].url).toContain(`/models/${FALLBACK_GEMINI_MODELS[0]}:`);
+  expect(seen[1].url).not.toContain(KEY);
+});
+
+test('every model busy: tries each once, then falls back with the status and the tried models in the note', async () => {
+  const d = await detail();
+  const { f, seen } = mockFetch(() => new Response('{}', { status: 503 }));
+  const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
+  expect(seen).toHaveLength(1 + FALLBACK_GEMINI_MODELS.length);
+  expect(r).toMatchObject({ source: 'fallback', error: 'http_error', status: 503 });
+  expect(r.note).toContain('HTTP 503');
+  expect(r.note).toContain(FALLBACK_GEMINI_MODELS[0]);
+  expect(r.note).not.toContain(KEY);
+});
+
+test('a bad key (400/403) and a timeout do not try other models', async () => {
+  const d = await detail();
+  for (const make of [() => new Response('{}', { status: 403 }), () => { throw new DOMException('t', 'TimeoutError'); }]) {
+    const { f, seen } = mockFetch(make);
+    const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
+    expect(seen).toHaveLength(1);
+    expect(r.source).toBe('fallback');
+  }
+});
+
+test('GEMINI_MODEL stays first and is not tried twice', async () => {
+  const { f, seen } = mockFetch(() => new Response('{}', { status: 503 }));
+  const p = createProvider({ GEMINI_API_KEY: KEY, GEMINI_MODEL: FALLBACK_GEMINI_MODELS[0] }, f)!;
+  await expect(p.complete('hi')).rejects.toThrow();
+  const models = seen.map((s) => /models\/([^:]+):/.exec(s.url)![1]);
+  expect(models[0]).toBe(FALLBACK_GEMINI_MODELS[0]);
+  expect(new Set(models).size).toBe(models.length);
 });
