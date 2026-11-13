@@ -107,3 +107,41 @@ test('a reply that arrives before the finance check leaves the label at finance_
   await svc.confirmFinance(c, 'finance');
   expect(await label()).toBe('ready');
 });
+
+test('attention reaches the list and the case: count, top tag and sorted items', async () => {
+  const svc = await make();
+  const v = await svc.listToday();
+  const by = (id: string) => v.items.find((i) => i.id === id)!;
+  // 계약: 지급일 미정이 맨 위, 같은 사실이 여러 곳에서 와도 한 줄
+  const c = by('CONTRACT-INF-001').attention;
+  expect(c.top).toMatchObject({ code: 'CONTRACT_OUTFLOW_UNKNOWN', tier: 'high', tag: '지급일 미정' });
+  expect(c.items.filter((i) => i.code === 'CONTRACT_OUTFLOW_UNKNOWN')).toHaveLength(1);
+  // PLAN-001: 손해(+요청 비중 역전은 한 줄로 통합), 현금 부족 구간
+  const p = by('PLAN-001').attention;
+  expect(p.items.map((i) => i.code)).toEqual(expect.arrayContaining(['LOSS', 'CASH_BREACH']));
+  expect(p.items.some((i) => i.code === 'ALLOCATION_INVERSION')).toBe(false);
+  expect(p.items.find((i) => i.code === 'LOSS')!.details.join(' ')).toContain('성과는 낮은데');
+  expect(p.items.map((i) => i.tier)).toEqual([...p.items.map((i) => i.tier)].sort((a, b) => 'high mid low'.indexOf(a) - 'high mid low'.indexOf(b)));
+  // 주의가 없는 건
+  expect(by('PLAN-013').attention).toEqual({ count: 0, top: null, items: [] });
+  // 상세에도 같은 값
+  expect((await svc.getCase('PLAN-001')).item.attention).toEqual(p);
+  // 결정이 끝난 건은 주의를 비운다
+  await svc.confirmFinance('PLAN-004', 'finance');
+  await svc.submit('PLAN-004', 'marketing');
+  await svc.decide('PLAN-004', 'masil_ceo', 'approve');
+  expect((await svc.getCase('PLAN-004')).item.attention.count).toBe(0);
+});
+
+test('a rejected plan adds the link warning to the contract attention as one auto-renew item', async () => {
+  const svc = await make();
+  await svc.confirmFinance('PLAN-001', 'finance');
+  await svc.submit('PLAN-001', 'marketing');
+  await svc.decide('PLAN-001', 'ceo_board', { reject: { reason: '재검토' } });
+  const c = (await svc.getCase('CONTRACT-INF-001')).item.attention;
+  expect(c.items.find((i) => i.code === 'AUTO_RENEW')!.details.join(' ')).toContain('기안만 부결');
+  await svc.advanceClock('2026-07-14');
+  const d = (await svc.getCase('CONTRACT-INF-001')).item.attention;
+  expect(d.items.filter((i) => i.code === 'AUTO_RENEW')).toHaveLength(1);
+  expect(d.items.find((i) => i.code === 'AUTO_RENEW')!.details.length).toBe(2);
+});
