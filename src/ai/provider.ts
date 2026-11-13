@@ -12,9 +12,9 @@ export const DEFAULT_MODEL = 'claude-sonnet-5-5';
  * Gemini 기본 모델: Google 공식 가격 문서(ai.google.dev/gemini-api/docs/pricing → aistudio.google.com/docs/pricing)에서
  * 무료 사용으로 표시된 flash 계열(2026-11 확인). GEMINI_MODEL 환경변수로 바꿀 수 있다.
  */
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'; // 사용자 결정: 가장 빠른 무료 flash 계열(3.8-flash는 답이 9~18초로 느렸다)
 /** 기본 모델이 바쁘거나(503·429) 없을 때(404) 차례로 시도하는 무료 flash 계열(가격 문서 기준, 2026-11 확인). */
-export const FALLBACK_GEMINI_MODELS: readonly string[] = ['gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+export const FALLBACK_GEMINI_MODELS: readonly string[] = ['gemini-3.8-flash', 'gemini-3.6-flash'];
 /** 다른 모델로 바꿔 볼 만한 일시적 오류 */
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 404]);
 const TIMEOUT_MS = 15_000;
