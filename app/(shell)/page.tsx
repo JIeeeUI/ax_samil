@@ -50,7 +50,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <CashTimeline
         today={v.today}
         breaches={v.breaches}
-        deadlines={v.items.filter((i) => nextStep(i, role).kind !== 'done').map((i) => i.effectiveDeadline)}
+        items={v.items.filter((i) => nextStep(i, role).kind !== 'done').map((i) => ({ id: i.id, name: i.influencer, kind: i.kind === 'contract' ? '연간 계약' : '캠페인', amount: i.amount, scale: i.scale, deadline: i.effectiveDeadline }))}
         comparison={v.cashComparison}
       />
 

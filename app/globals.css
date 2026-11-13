@@ -60,18 +60,40 @@ main { padding-top: 12px; padding-bottom: 88px; }
 
 /* ---- 현금 타임라인 ---- */
 .tl { padding: 12px 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
-.tl-plot { position: relative; height: 104px; }
-.tl-axis { position: absolute; left: 0; right: 0; top: 56px; height: 1px; background: var(--ink); }
-.tl-band { position: absolute; top: 50px; height: 13px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r1); }
-.tl-tick { position: absolute; top: 66px; transform: translateX(-50%); font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tl-today { position: absolute; top: 14px; height: 48px; border-left: 1px dashed var(--muted); }
-.tl-today i { position: absolute; top: -16px; left: 4px; font-style: normal; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
-.tl-stack { position: absolute; bottom: 50px; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; }
-.tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); display: block; }
-.tl-stack b { font-size: 0.7rem; color: var(--muted); font-weight: 600; line-height: 1; margin-bottom: 2px; }
-.tl-label { position: absolute; top: 82px; font-size: 0.78rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
-.tl-sum { margin: 8px 0 4px; font-size: 0.92rem; }
-.tl-more { margin: 4px 0 6px; }
+.tl-plot { position: relative; height: 84px; }
+.tl-axis { position: absolute; left: 0; right: 0; top: 40px; height: 1px; background: var(--ink); }
+/* 현금 부족 구간: 띠 안쪽을 연한 빨강으로 채운다 */
+.tl-band { position: absolute; top: 28px; height: 25px; background: var(--accent-soft); }
+.tl-label { position: absolute; top: 8px; font-size: 0.76rem; color: var(--accent); font-weight: 600; white-space: nowrap; }
+.tl-tick { position: absolute; top: 40px; width: 0; height: 8px; border-left: 1px solid var(--muted); }
+.tl-tick i { position: absolute; top: 12px; left: 0; transform: translateX(-50%); font-style: normal; font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-today { position: absolute; top: 20px; height: 28px; border-left: 1px dashed var(--muted); }
+.tl-today i { position: absolute; top: -14px; left: 4px; font-style: normal; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+
+/* 점 하나 = 건 하나. 구간 안의 점만 포인트색 */
+.tl-dot, .tl-group { position: absolute; top: 40px; transform: translate(-50%, -50%); }
+.tl-dot { display: block; border-radius: 50%; background: var(--ink); text-decoration: none; }
+.tl-dot.red { background: var(--accent); }
+.tl-dot.hollow { background: var(--bg); border: 2px solid var(--ink); }
+.tl-dot.hollow.red { border-color: var(--accent); }
+.tl-group { padding: 0 6px; line-height: 18px; border: 1px solid var(--ink); border-radius: var(--r1); background: var(--surface); font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; cursor: default; white-space: nowrap; }
+.tl-group.red { border-color: var(--accent); color: var(--accent); }
+.tl-dot:hover, .tl-dot:focus-visible, .tl-group:hover, .tl-group:focus-visible { z-index: 6; }
+.tl-dot:focus-visible, .tl-group:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* 마우스를 올리거나 키보드로 이동하면 제안명·금액·결정 기한이 나타난다 */
+.tl-dot[data-tip]:hover::after, .tl-dot[data-tip]:focus-visible::after,
+.tl-group[data-tip]:hover::after, .tl-group[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 260px; white-space: pre-line; text-align: left; font-size: 0.78rem; font-weight: 500; line-height: 1.5;
+  padding: 6px 10px; border-radius: var(--r1); background: var(--ink); color: var(--bg); pointer-events: none;
+}
+.tl-dot.tip-l[data-tip]:hover::after, .tl-dot.tip-l[data-tip]:focus-visible::after, .tl-group.tip-l[data-tip]:hover::after, .tl-group.tip-l[data-tip]:focus-visible::after { left: 0; transform: none; }
+.tl-dot.tip-r[data-tip]:hover::after, .tl-dot.tip-r[data-tip]:focus-visible::after, .tl-group.tip-r[data-tip]:hover::after, .tl-group.tip-r[data-tip]:focus-visible::after { left: auto; right: 0; transform: none; }
+
+.tl-sum { margin: 6px 0 4px; font-size: 0.92rem; }
+.tl-more { display: block; margin: 8px 0 4px; }
+@media (max-width: 720px) { .tl-tick.alt i { display: none; } }
 
 /* ---- 목록(표) ---- */
 .listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 16px 0 6px; }

@@ -77,7 +77,7 @@ export default async function CasePage({
       {i.status === 'submitted' && role === decider && canSecond && (
         <details className="fold"><summary>정보가 더 필요하면 보류하기</summary>
           <form action={actDecide} className="hold">{hidden}<input type="hidden" name="decision" value="hold" />
-            <label>무엇을 확인해야 합니까? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
+            <label>무엇을 확인해야 합니까? <input name="holdNeeded" placeholder="예: 돈이 나가는 날짜" required /></label>
             <label>누가 확인합니까? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
             <label>언제까지 답을 받습니까? <input type="date" name="holdDue" required /></label>
             <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
@@ -177,7 +177,7 @@ export default async function CasePage({
               {d.review.state === 'pending' && (d.review.canHold ? (
                 <details className="fold"><summary>정보가 더 필요하면 1차 보류</summary>
                   <form action={actPrimary} className="hold">{hidden}<input type="hidden" name="op" value="hold" />
-                    <label>무엇을 확인해야 합니까? <input name="holdNeeded" defaultValue={d.needsInfo[0] ?? ''} required /></label>
+                    <label>무엇을 확인해야 합니까? <input name="holdNeeded" placeholder="예: 돈이 나가는 날짜" required /></label>
                     <label>누가 확인합니까? <select name="holdOwner" defaultValue={defaultOwnerFor(d.needsInfo[0] ?? '')}>{ROLES.map((x) => <option key={x} value={x}>{ROLE_LABEL[x]}</option>)}</select></label>
                     <label>언제까지 답을 받습니까? (최대 {d.review.holdCapDate}) <input type="date" name="holdDue" max={d.review.holdCapDate} required /></label>
                     <button type="submit" className="secondary">보류하고 확인 요청 보내기</button>
