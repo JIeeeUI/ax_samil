@@ -13,6 +13,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const SCENARIO_LABEL: Record<ScenarioId, string> = {
   baseline: '기본 (연체 AR·AP 기준일 처리, LC-0001 90일)', arOverdueExcluded: '연체 AR 제외', apOverdueExcluded: '연체 AP 제외',
   bothOverdueExcluded: '연체 AR·AP 모두 제외', lc45: 'LC-0001 45일 (민감도 점검)',
+  demandOnly: '반품 원인 분리 보기 (오배송·불량 제외)',
 };
 
 export const LABEL_KO = { confirmed: '확정', benchmark: '벤치마크', assumption: '가정' } as const;
