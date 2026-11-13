@@ -22,3 +22,9 @@
 - 이 폴더는 Windows 용이에요. Mac 에서 작업하려면 Mac 용으로 다시 내려받아요.
 - Windows 는 C:\axwar 처럼 짧은 경로에 풀어요. 깊은 폴더에 풀면 경로가 260자를 넘는 자료 파일이 빠져요.
 - Codex 를 처음 열면 「Set up the Codex agent sandbox」 창이 떠요. 관리자 권한이 있으면 관리자 설정, 없으면 non-admin 을 골라요.
+
+## 배포 실행 (제안 심사 앱)
+- 서버 앱(Next.js)으로 배포해요: `axhub.yaml` 의 `deploy_method: docker`, 앱 DB(`database.engine: postgres`)를 써요.
+- 운영에서는 `DATABASE_URL` 이 있어야 시작해요(axhub 가 앱 DB 주소를 넣어 줘요). 없으면 메모리 DB 로 조용히 돌지 않고 오류로 멈춰요.
+- AI 키(`GEMINI_API_KEY`, 선택 `ANTHROPIC_API_KEY`)는 없어도 앱이 동작해요(기본 문장 사용). 쓰려면 사용자가 직접 `printf '%s' "$KEY" | axhub env set GEMINI_API_KEY --app ax-talent-war-jieu --secret --stage runtime --from-stdin` 로 등록해요.
+- 로컬 실행: `npm ci && npm run dev`(메모리 DB), 시연 3건 확인: `npm run demo -- all`, 테스트: `npm test`.

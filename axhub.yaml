@@ -1,5 +1,24 @@
 version: axhub/v1
 name: ax-talent-war-jieu
+runtime:
+  port: 3000
+  health_path: /api/health
+  healthcheck:
+    start_period: 90s
+    interval: 10s
+    timeout: 5s
+    retries: 6
 build:
-  deploy_method: static
-  static_output_dir: public
+  strategy: auto
+  framework: node
+  deploy_method: docker
+database:
+  engine: postgres
+env:
+  optional:
+    - name: GEMINI_API_KEY
+      scope: runtime
+    - name: GEMINI_MODEL
+      scope: runtime
+    - name: ANTHROPIC_API_KEY
+      scope: runtime
