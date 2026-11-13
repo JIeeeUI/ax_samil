@@ -58,6 +58,16 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       </section>
 
       <section className="card-block">
+        <h2>확장 기능(결재 이후) 보기</h2>
+        <p>이 도구의 중심은 상신 전 점검이에요. 결재 이후 기능(재무 반려·마케팅 회신·통보 작업·1차/2차 결재·알림 계획표)은 구현돼 있지만 기본으로 숨겨져 있어요. 켜면 화면에 나타납니다.</p>
+        <form action={actSetConfig} className="hold">{hidden}
+          <label>확장 기능 보기 <select name="showExtended" defaultValue={cfg.showExtended ? 'on' : 'off'}><option value="off">끄기(기본)</option><option value="on">켜기</option></select></label>
+          <button type="submit">저장</button>
+        </form>
+      </section>
+
+      {cfg.showExtended && (<>
+      <section className="card-block">
         <h2>결재·알림 설정 <Badge tone="amber">가정</Badge></h2>
         <p>교육용으로 정한 값이에요. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>이에요.</p>
         <form action={actSetConfig} className="hold">{hidden}
@@ -99,6 +109,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         </ul>
         <p className="meta">기존 값(알림 D-14/7/3, 긴급 10일, 확인 요청 +3일)은 그대로예요.</p>
       </section>
+      </>)}
 
       <h2>가정을 바꿔 보기</h2>
       <p>현금 계산에는 자료에 없어서 정한 가정이 들어 있어요. 가정을 바꾸면 현금이 부족해지는 기간이 달라지고, 그에 따라 <strong>누가 승인해야 하는지</strong>도 달라질 수 있습니다. 아직 끝나지 않은 건만 다시 계산돼요.</p>

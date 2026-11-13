@@ -110,6 +110,7 @@ export async function actPrimary(fd: FormData) {
 export async function actSetConfig(fd: FormData) {
   const patch: ConfigPatch = {};
   if (field(fd, 'twoStage') !== '') patch.twoStage = field(fd, 'twoStage') === 'on';
+  if (field(fd, 'showExtended') !== '') patch.showExtended = field(fd, 'showExtended') === 'on';
   if (field(fd, 'urgentDays') !== '') patch.urgentDays = Number(field(fd, 'urgentDays'));
   if (field(fd, 'holdCapDays') !== '') patch.holdCapDays = Number(field(fd, 'holdCapDays'));
   if (field(fd, 'alertPlan') !== '') patch.alertPlan = field(fd, 'alertPlan') as NonNullable<ConfigPatch['alertPlan']>;

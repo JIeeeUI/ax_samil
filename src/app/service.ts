@@ -36,11 +36,12 @@ export interface ReplyValues { cashOutflowDate?: IsoDate; annualFixedFeeKrw?: nu
 export interface Raised { caseId: string; stage: string; kind: 'alert' | 'escalation' | 'expired' | 'parallel' | 'warning' }
 
 /** 화면에서 바꿀 수 있는 [가정] 설정값. 기본은 1단계 결재(twoStage 꺼짐). */
-export interface Config { twoStage: boolean; urgentDays: number; holdCapDays: number; alertPlan: AlertPlanId; returnReasons: Record<ReturnReason, boolean> }
+export interface Config { twoStage: boolean; urgentDays: number; holdCapDays: number; alertPlan: AlertPlanId; returnReasons: Record<ReturnReason, boolean>; /** 결재 이후 기능을 화면에 보일지(기본 꺼짐) */ showExtended: boolean }
 export type ConfigPatch = Partial<Omit<Config, 'returnReasons'>> & { returnReasons?: Partial<Record<ReturnReason, boolean>> };
 export const DEFAULT_CONFIG: Config = {
   twoStage: false, urgentDays: 10, holdCapDays: 3, alertPlan: 'current',
   returnReasons: { cash_breach: true, loss_or_inversion: true, weak_basis: true, other: true },
+  showExtended: false,
 };
 /** 마케팅이 조정한 값(원본 자료는 그대로 두고 덮어쓴다). 이력은 사건 기록에 남는다. */
 export type Adjustments = Record<string, { settlementDate?: IsoDate; amount?: number }>;
@@ -773,6 +774,7 @@ export class IntakeService {
     if (patch.urgentDays !== undefined && !(Number.isInteger(patch.urgentDays) && patch.urgentDays >= 1 && patch.urgentDays <= 60)) throw bad('긴급 기준은 1~60일');
     if (patch.holdCapDays !== undefined && !(Number.isInteger(patch.holdCapDays) && patch.holdCapDays >= 0 && patch.holdCapDays <= 30)) throw bad('1차 보류 상한은 0~30일');
     if (patch.alertPlan !== undefined && !Object.hasOwn(ALERT_PLANS, patch.alertPlan)) throw bad(`알 수 없는 알림 계획표: ${String(patch.alertPlan)}`);
+    if (patch.showExtended !== undefined && typeof patch.showExtended !== 'boolean') throw bad('showExtended는 켬/끔이어야 합니다');
     if (patch.returnReasons !== undefined) {
       for (const [k, v] of Object.entries(patch.returnReasons)) {
         if (!RETURN_REASONS.includes(k as ReturnReason)) throw bad(`알 수 없는 반려 사유: ${k}`);

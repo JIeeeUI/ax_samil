@@ -27,7 +27,7 @@ export default async function CasePage({
   const summary = await summarizeForApproval(d, ai === '1' ? createProvider(process.env) : null);
   const decider = decisionRole(i.routeLevel);
   // 1차/2차를 켠 경우 CEO/이사회는 1차 상신 또는 긴급 병행 상신 뒤에만 결정한다.
-  const canSecond = !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
+  const canSecond = !(await svc.getConfig()).showExtended || !d.review || d.review.state === 'escalated' || d.review.state === 'closed_parallel' || d.review.parallel;
   const step = nextStep(i, role);
   const at = flowIndex(i.status);
   const hidden = <><input type="hidden" name="id" value={id} /><input type="hidden" name="back" value={back} /></>;
@@ -53,7 +53,7 @@ export default async function CasePage({
       </section>
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed} /><button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={!cfg.showExtended || d.returnState.allowed ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={cfg.showExtended && !d.returnState.allowed} /><button type="submit">재무 확인 완료</button></form>}
           {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했어요</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
@@ -76,7 +76,7 @@ export default async function CasePage({
           </form>
         </details>
       )}
-      {i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
+      {cfg.showExtended && i.status === 'finance_review' && role === 'finance' && (d.returnState.allowed ? (
         <details className="fold"><summary>문제가 있으면 마케팅에 되돌리기(반려)</summary>
           <form action={actFinanceReturn} className="hold">{hidden}
             <p className="meta">사유를 고르세요. 엔진 결과에 해당하는 칸은 미리 체크해 두었어요. 마케팅은 {koDate(d.returnState.dueIfReturnedToday)}까지 답해야 하고, 반려는 한 번만 할 수 있어요.</p>
@@ -90,8 +90,8 @@ export default async function CasePage({
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
       {d.cashComparison.needsFinanceCheck && <div className="flash flash-warn"><strong>재무 확인 필요(공식 현금 전망과 차이)</strong> {d.cashComparison.lines.join(' / ')}<br /><small>{d.cashComparison.unverified.join(' · ')}</small></div>}
-      {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
-      {d.notice && d.notice.status !== 'void' && (
+      {cfg.showExtended && d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
+      {cfg.showExtended && d.notice && d.notice.status !== 'void' && (
         <section className="card-block">
           <h2>에이전시 통보 <small>(발송은 마케팅, 기록은 계약 담당 · 교육용 가정)</small></h2>
           <p>{{ terminate: '해지 통보', change: '조건 변경 통보', renew_confirm: '갱신 확정 기록' }[d.notice.kind]}{d.notice.required ? ' (필수)' : ' (통보 불요: 기록만)'} · 통보 기한 {koDate(d.notice.dueDate)} · <Badge tone={d.notice.status === 'done' ? 'green' : 'amber'}>{{ open: '미완료', sent: '발송됨(기록 대기)', done: '완료', void: '취소' }[d.notice.status]}</Badge></p>
@@ -109,14 +109,14 @@ export default async function CasePage({
           )}
         </section>
       )}
-      {d.adjustments.length > 0 && (
+      {cfg.showExtended && d.adjustments.length > 0 && (
         <div className="flash flash-warn"><strong>마케팅이 조정한 내용</strong>
           <ul className="reqs">{d.adjustments.map((a, n) => (
             <li key={n}>{a.field === 'settlementDate' ? `집행일 ${md(String(a.from))}→${md(String(a.to))} 조정됨` : `요청액 ${shortWon(Number(a.from))}→${shortWon(Number(a.to))} 조정됨`} <small>({koDate(a.date)})</small></li>
           ))}</ul>
         </div>
       )}
-      {d.revisions.length > 0 && (
+      {cfg.showExtended && d.revisions.length > 0 && (
         <section className="card-block">
           <h2>재무 반려(보완 요청)</h2>
           {d.revisions.map((rv) => (
@@ -146,7 +146,7 @@ export default async function CasePage({
       {i.status === 'on_hold' && <p><Link href="/requests">확인 요청</Link>에서 답변을 입력하면 자동으로 다시 계산해요.</p>}
       {step.kind === 'waiting' && i.status !== 'on_hold' && <p className="meta">위쪽 “보는 사람”을 바꾸면 그 역할로 이어서 해 볼 수 있어요(시연용).</p>}
 
-      {d.review && (
+      {cfg.showExtended && d.review && (
         <section className="card-block">
           <h2>결재 단계 <small>(1차 대표 검토 → 2차 CEO/이사회 결정 · 교육용 가정)</small></h2>
           <ol className="plain">

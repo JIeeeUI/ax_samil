@@ -66,3 +66,15 @@ test('submitting from the screen needs the extra confirmation; the service call 
   expect(await c.submit('PLAN-019', 'marketing', true)).toEqual({ ok: true });
   expect((await svc.getCase('PLAN-019')).item.status).toBe('submitted');
 });
+
+test('the post-approval features switch is off by default and validated', async () => {
+  const svc = await make();
+  expect((await svc.getConfig()).showExtended).toBe(false);
+  await svc.setConfig({ showExtended: true });
+  expect((await svc.getConfig()).showExtended).toBe(true);
+  await expect(svc.setConfig({ showExtended: 'yes' as never })).rejects.toThrow(/INVALID_CONFIG/);
+  // 숨기는 것은 화면뿐이다: 꺼져 있어도 서비스 기능은 그대로 동작한다
+  await svc.setConfig({ showExtended: false });
+  await svc.financeReturn('PLAN-001', 'finance', { reasons: ['cash_breach'], opinion: '확인' });
+  expect((await svc.getCase('PLAN-001')).item.status).toBe('revision');
+});
