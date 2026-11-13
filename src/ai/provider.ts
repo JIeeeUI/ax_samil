@@ -18,6 +18,8 @@ export const FALLBACK_GEMINI_MODELS: readonly string[] = ['gemini-3.6-flash', 'g
 /** 다른 모델로 바꿔 볼 만한 일시적 오류 */
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 404]);
 const TIMEOUT_MS = 15_000;
+/** Gemini 모델은 답하는 데 9~18초 걸리는 일이 실제로 있어(서버 로그 확인) 15초에서 자주 끊겼다. 그래서 Gemini만 30초로 둔다. */
+const GEMINI_TIMEOUT_MS = 30_000;
 
 const isTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
 
@@ -38,7 +40,7 @@ async function send(call: () => Promise<Response>): Promise<Response> {
   try {
     res = await call();
   } catch (e) {
-    if (isTimeout(e)) throw new AiError('timeout', '시간 초과(15초)');
+    if (isTimeout(e)) throw new AiError('timeout', '시간 초과');
     throw new AiError('http_error', `호출 실패: ${(e as Error).message}`);
   }
   if (!res.ok) throw new AiError('http_error', `HTTP ${res.status}`, res.status);
@@ -74,7 +76,7 @@ async function callGemini(key: string, model: string, prompt: string, fetchImpl:
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1024 } }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
   }));
   let body: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   try { body = (await res.json()) as typeof body; } catch { throw new AiError('http_error', '응답을 읽을 수 없음'); }
