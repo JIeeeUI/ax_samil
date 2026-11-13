@@ -11,7 +11,7 @@ import { extractTokens, verifyFacts, type Facts } from './verify.js';
  * 결과 모양: text(화면에 쓸 문장), source('ai' | 'fallback' = 템플릿 대체), note(사람이 읽는 설명),
  * error(대체된 이유: no_key | timeout | http_error | verify_failed, AI를 요청하지 않았으면 없음).
  */
-export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode; /** 구글 등 서버가 돌려준 HTTP 상태(있을 때만) */ status?: number }
+export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: string; error?: AiErrorCode; /** 숫자 검사에 걸린 값(verify_failed일 때) */ unmatched?: string[]; /** 구글 등 서버가 돌려준 HTTP 상태(있을 때만) */ status?: number }
 export interface AssistOptions { /** 사용자가 AI 사용을 요청했는지(요청했는데 키가 없으면 no_key) */ requested?: boolean }
 
 const won = formatMan;
@@ -62,8 +62,10 @@ async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, tem
   if (!ai) return { text: template, source: 'fallback', note: 'AI 미사용', ...(requested ? { error: 'no_key' as const } : {}) };
   try {
     const out = (await ai.complete(prompt)).trim();
-    if (out === '' || !verifyFacts(out, buildFacts(d)).ok) {
-      return { text: template, source: 'fallback', note: 'AI 문장 숫자 불일치: 미반영', error: 'verify_failed' };
+    const check = out === '' ? { ok: false, unmatched: ['빈 응답'] } : verifyFacts(out, buildFacts(d));
+    if (!check.ok) {
+      const shown = check.unmatched.slice(0, 5).join(', ');
+      return { text: template, source: 'fallback', note: `AI 문장 숫자 불일치: 미반영${shown ? ` (걸린 값: ${shown})` : ''}`, error: 'verify_failed', unmatched: check.unmatched };
     }
     return { text: out, source: 'ai', note: '' };
   } catch (e) {
@@ -71,7 +73,7 @@ async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, tem
   }
 }
 
-const RULES = '새로운 숫자나 날짜를 만들지 말고, 승인·거절을 결정하거나 권하지 마세요. 한국어로 답하세요.';
+const RULES = '사실에 없는 숫자나 날짜를 만들거나 계산하지 말고, 승인·거절을 결정하거나 권하지 마세요. 날짜는 사실에 적힌 2026-07-17 형식 그대로 쓰고(7월 17일, 7/17로 바꾸지 마세요), 금액은 사실에 적힌 "1,680만 원" 표기 그대로 쓰며(억 단위로 바꾸지 마세요), 비율·순위·남은 일수도 사실의 숫자만 그대로 쓰세요. 한국어로 답하세요.';
 
 export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const t = templateSummary(d);

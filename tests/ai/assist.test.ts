@@ -27,7 +27,8 @@ test('an AI sentence with an invented number is not used', async () => {
   const d = await detail();
   const r = await summarizeForApproval(d, fake('고정 피는 99억 원이며 승인을 권고합니다.'));
   expect(r.source).toBe('fallback');
-  expect(r.note).toBe('AI 문장 숫자 불일치: 미반영');
+  expect(r.note).toContain('AI 문장 숫자 불일치: 미반영');
+  expect(r.unmatched!.length).toBeGreaterThan(0);
   expect(r.error).toBe('verify_failed');
 });
 
