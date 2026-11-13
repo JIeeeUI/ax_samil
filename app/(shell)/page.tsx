@@ -6,6 +6,8 @@ import { formal } from '../formal.js';
 import { CHECK_LABEL, STATUS_PLAIN, WHO_DECIDES, WHO_SHORT, daysLeftText, issuePlain, koDate, nextStep, shortWon } from '../plain.js';
 import { currentRole } from '../session.js';
 import { CashTimeline } from '../timeline.js';
+import { TodayList } from '../today-list.js';
+import type { ListRow } from '../today-list.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,24 +16,25 @@ const VIEWS: [View, string][] = [['open', '진행 중'], ['mine', '내 차례'],
 
 const statusText = (i: TodayItem) => (i.checkLabel ? CHECK_LABEL[i.checkLabel] : STATUS_PLAIN[i.status]);
 
-function Row({ i, mine }: { i: TodayItem; mine: boolean }) {
+function toRow(i: TodayItem, mine: boolean): ListRow {
   const serious = i.issues.filter((c) => issuePlain(c).serious).length;
   const kind = i.kind === 'contract' ? '연간 계약' : '캠페인';
-  return (
-    <tr>
-      <td data-label="제안">
-        <Link href={`/cases/${i.id}`} className="rowlink" aria-label={`${i.influencer} ${kind} ${shortWon(i.amount)} 상세 열기`}>{i.influencer}</Link>
-      </td>
-      <td data-label="유형">{kind}</td>
-      <td data-label="금액" className="num" title={won(i.amount)}>{shortWon(i.amount)}</td>
-      <td data-label="결정 기한">{koDate(i.effectiveDeadline)} <span className="muted">{daysLeftText(i.daysLeft)}</span></td>
-      <td data-label="결정자">{WHO_SHORT[i.routeLevel] ?? WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</td>
-      <td data-label="상태">
-        {mine && <strong>내 차례 · </strong>}{statusText(i)}
-        {serious > 0 && <span className="accent"> · 주의 {serious}</span>}
-      </td>
-    </tr>
-  );
+  const [m, d] = [Number(i.effectiveDeadline.slice(5, 7)), Number(i.effectiveDeadline.slice(8, 10))];
+  return {
+    id: i.id,
+    name: i.influencer,
+    kind,
+    amountText: shortWon(i.amount),
+    amountTitle: won(i.amount),
+    deadline: koDate(i.effectiveDeadline),
+    daysLeft: daysLeftText(i.daysLeft),
+    who: `${WHO_SHORT[i.routeLevel] ?? WHO_DECIDES[i.routeLevel]}${i.provisional ? ' (잠정)' : ''}`,
+    status: statusText(i),
+    serious,
+    mine,
+    // 화면에 보이지 않는 값(내부 ID, 날짜·금액의 다른 표기)도 검색에는 걸리게 한다.
+    hay: `${mine ? '내 차례' : ''} ${i.id} ${m}/${d} ${m}월${d}일 ${i.effectiveDeadline} ${i.amount / 10000} ${i.amount}`,
+  };
 }
 
 export default async function Today({ searchParams }: { searchParams: Promise<{ error?: string; view?: string }> }) {
@@ -65,15 +68,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </nav>
       </div>
 
-      <table className="list">
-        <thead>
-          <tr><th>제안</th><th>유형</th><th className="num">금액</th><th>결정 기한</th><th>결정자</th><th>상태</th></tr>
-        </thead>
-        <tbody>
-          {shown.map(({ i, kind }) => <Row key={i.id} i={i} mine={kind === 'mine'} />)}
-          {shown.length === 0 && <tr className="empty"><td colSpan={6}>해당하는 건이 없습니다.</td></tr>}
-        </tbody>
-      </table>
+      <TodayList key={view} rows={shown.map(({ i, kind }) => toRow(i, kind === 'mine'))} tabLabel={VIEWS.find(([k]) => k === view)![1]} />
 
       {v.linkWarnings.map((w) => <p key={w.influencerId} className="warnline"><span className="accent">주의</span> {formal(w.message)}</p>)}
       {v.openRequests > 0 && <p className="line"><Link href="/requests">답을 기다리는 확인 요청 {v.openRequests}건</Link></p>}

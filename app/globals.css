@@ -227,3 +227,17 @@ form > input:not([type='hidden']) + button { margin-top: 0; }
 .scn { padding: 12px 14px; }
 .scn.on { border-color: var(--ink); }
 .scn p { margin: 4px 0 8px; color: var(--muted); font-size: 0.9rem; }
+
+/* 할 일 검색 */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.search { margin: 8px 0 12px; }
+.search label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+.search-box { display: flex; gap: 8px; align-items: center; max-width: 420px; }
+.search-box input { flex: 1; min-width: 0; min-height: 40px; padding: 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: var(--r1); color: #1b1f2a; font: inherit; }
+.search-box input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.sbtn { min-height: 40px; padding: 4px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r1); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sbtn:hover { border-color: var(--ink); }
+table.list tr.empty .sbtn { min-height: 36px; margin-left: 8px; }
+.search .small { margin: 4px 0 0; font-size: 0.8rem; }
+.search .count { margin: 6px 0 0; font-size: 0.85rem; font-weight: 600; }
+table.list tr.empty td { text-align: left; }
