@@ -3,6 +3,7 @@ import { formatMan } from '../format.js';
 import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import type { CaseDetail, ReplyValues } from '../app/service.js';
+import { requestLabel, whyOf } from '../workflow/requestKinds.js';
 import { ROLE_LABEL, isRole } from '../workflow/roles.js';
 import { AiError, type AiErrorCode, type AiProvider } from './provider.js';
 import { extractTokens, verifyFacts, type Facts } from './verify.js';
@@ -15,15 +16,6 @@ export interface AssistResult { text: string; source: 'ai' | 'fallback'; note: s
 export interface AssistOptions { /** 사용자가 AI 사용을 요청했는지(요청했는데 키가 없으면 no_key) */ requested?: boolean }
 
 const won = formatMan;
-const NEEDED_LABEL: Record<string, string> = {
-  cash_outflow_date: '고정 피 현금 유출일(지급 일정)',
-  payment_schedule: '고정 피 지급 일정',
-  performance_fee_terms: '성과 피(GMV 연동) 조건',
-};
-const NEEDED_WHY: Record<string, string> = {
-  cash_outflow_date: '하회 구간(covenant) 해당 여부를 판정할 수 없어 승인 경로가 확정되지 않습니다.',
-  performance_fee_terms: '성과 피를 포함하면 연 10억 원을 넘을 수 있어 승인 경로가 잠정입니다.',
-};
 
 /** 엔진이 계산한 값만 모은다. AI 문장은 이 안의 숫자·날짜만 쓸 수 있다. */
 export function buildFacts(d: CaseDetail): Facts {
@@ -83,8 +75,8 @@ export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null, opts:
 export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const req = d.requests.find((r) => r.needed === needed && r.status === 'requested');
   const owner = req && isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : 'Masil 재무팀';
-  const label = NEEDED_LABEL[needed] ?? needed;
-  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${NEEDED_WHY[needed] ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
+  const label = requestLabel(needed, 'ai');
+  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${whyOf(needed) ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
   return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t, opts.requested);
 }
 

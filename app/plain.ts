@@ -1,5 +1,6 @@
 import type { TodayItem } from '../src/app/service.js';
 import { formatMan } from '../src/format.js';
+import { requestLabel } from '../src/workflow/requestKinds.js';
 import { decisionRole, ROLE_LABEL, type Role } from '../src/workflow/roles.js';
 import { TERMINAL } from '../src/workflow/status.js';
 
@@ -99,12 +100,8 @@ export const flowIndex = (status: string): number =>
   status === 'finance_review' || status === 'revision' || status === 'consulting' ? 0 : status === 'routed' ? 1 : status === 'approved' || status === 'closed' || status === 'overdue' ? 3 : 2;
 
 /** 확인 요청의 '필요한 정보' 이름(코드 값이면 쉬운 말로, 이미 문장이면 그대로) */
-export const NEEDED_PLAIN: Record<string, string> = {
-  cash_outflow_date: '고정 비용이 실제로 나가는 날짜',
-  payment_schedule: '고정 비용 지급 일정',
-  performance_fee_terms: '성과 피 조건(포함하면 연 10억 원을 넘는지)',
-};
-export const neededLabel = (needed: string) => NEEDED_PLAIN[needed] ?? needed;
+export const NEEDED_PLAIN: Record<string, string> = Object.fromEntries(['cash_outflow_date', 'payment_schedule', 'performance_fee_terms'].map((c) => [c, requestLabel(c, 'plain')]));
+export const neededLabel = (needed: string) => requestLabel(needed, 'plain');
 
 /** 카드 안에서 한 줄에 들어가도록 줄인 '누가 결정하나' 이름 */
 export const WHO_SHORT: Record<string, string> = {

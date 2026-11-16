@@ -7,15 +7,12 @@ import { ROLE_LABEL, isRole } from '../../../src/workflow/roles.js';
 import { actReply } from '../../actions.js';
 import { Badge, Flash } from '../../components.js';
 import { koDate } from '../../plain.js';
+import { requestLabel } from '../../../src/workflow/requestKinds.js';
 import { currentRole } from '../../session.js';
 
 export const dynamic = 'force-dynamic';
 
-const NEEDED_PLAIN: Record<string, string> = {
-  cash_outflow_date: '고정 비용이 실제로 나가는 날짜',
-  payment_schedule: '고정 비용 지급 일정',
-  performance_fee_terms: '성과 피(GMV 연동) 조건 — 포함하면 연 10억 원을 넘는지',
-};
+const NEEDED_PAGE = (needed: string) => requestLabel(needed, 'page');
 const REQ_STATUS: Record<string, string> = { requested: '답변 기다리는 중', replied: '답변 받음', closed: '종료' };
 const CONTRACT = 'CONTRACT-INF-001';
 
@@ -59,7 +56,7 @@ export default async function Requests({
         );
         return (
           <section key={q.id} className="card-block">
-            <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} {q.caseId.startsWith('CONTRACT') ? '연간 계약' : '캠페인'}</Link> — {NEEDED_PLAIN[q.needed] ?? q.needed} 확인</h3>
+            <h3><Link href={`/cases/${q.caseId}`}>{name.get(q.caseId)} {q.caseId.startsWith('CONTRACT') ? '연간 계약' : '캠페인'}</Link> — {NEEDED_PAGE(q.needed)} 확인</h3>
             <p>
               답변 담당 <strong>{isRole(q.ownerRole) ? ROLE_LABEL[q.ownerRole] : q.ownerRole}</strong> · 기한 <strong>{koDate(q.dueDate)}</strong>
               {late && <> <Badge tone="red">기한이 지났습니다</Badge></>}
@@ -117,7 +114,7 @@ export default async function Requests({
       <details className="fold"><summary>처리된 요청 {done.length}건</summary>
         {done.length === 0 ? <p>아직 없습니다.</p> : (
           <ul>{done.map((q) => (
-            <li key={q.id}>{name.get(q.caseId)}({q.caseId}) · {NEEDED_PLAIN[q.needed] ?? q.needed} · {REQ_STATUS[q.status] ?? q.status}{q.repliedDate && ` (${q.repliedDate})`}</li>
+            <li key={q.id}>{name.get(q.caseId)}({q.caseId}) · {NEEDED_PAGE(q.needed)} · {REQ_STATUS[q.status] ?? q.status}{q.repliedDate && ` (${q.repliedDate})`}</li>
           ))}</ul>
         )}
       </details>

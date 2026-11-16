@@ -15,6 +15,7 @@ import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type Link
 import { SCHEDULE, canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
 import { computeCampaignPerformance, computeInfluencerPerformance } from '../engine/performance.js';
 import { canChangeContract, canReply, defaultOwnerFor, neededKo, replyKeysFor } from '../workflow/ownership.js';
+import { requiredValueOf } from '../workflow/requestKinds.js';
 import { ROLE_LABEL, isRole, type Role } from '../workflow/roles.js';
 import { TERMINAL, transition, type Action, type HoldInput, type Status } from '../workflow/status.js';
 
@@ -739,6 +740,12 @@ export class IntakeService {
       throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
     }
     const hasValues = v.cashOutflowDate !== undefined || v.annualFixedFeeKrw !== undefined;
+    // 값 없이는 완료할 수 없다: 필수 입력이 있는 요청은 resolved=true로도 값 없이 못 끝내고, 값이 없는 회신은 본문이 있어야 한다.
+    if (!hasValues) {
+      const need = requiredValueOf(req.needed);
+      if (need !== null && input.resolved) throw new Error(`INVALID_REPLY: "${neededKo(req.needed)}" 요청은 값(${need})을 입력해야 완료할 수 있습니다`);
+      if ((input.text ?? '').trim() === '') throw new Error('INVALID_REPLY: 회신 내용을 입력해야 합니다');
+    }
     const c0 = await this.compute();
     if (!hasValues && input.resolved) {
       // 구조화 값이 필요 없는 요청(예: 추가 자료)은 회신 완료로 풀어 준다.
