@@ -18,8 +18,11 @@ export const FALLBACK_GEMINI_MODELS: readonly string[] = ['gemini-3.8-flash', 'g
 /** 다른 모델로 바꿔 볼 만한 일시적 오류 */
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 404]);
 const TIMEOUT_MS = 15_000;
-/** Gemini 모델은 답하는 데 9~18초 걸리는 일이 실제로 있어(서버 로그 확인) 15초에서 자주 끊겼다. 그래서 Gemini만 30초로 둔다. */
-const GEMINI_TIMEOUT_MS = 30_000;
+/**
+ * Gemini 모델은 답하는 데 9~18초 걸리는 일이 실제로 있어(서버 로그 확인) 15초에서 자주 끊겼다.
+ * 모델을 바꿔 다시 시도해도 요청 전체가 이 시간(화면 안내 "최대 30초"보다 짧게)을 넘지 않는다.
+ */
+export const GEMINI_TOTAL_MS = 28_000;
 
 const isTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
 
@@ -29,8 +32,9 @@ export function createProvider(
   fetchImpl: typeof fetch = fetch,
   /** 허용할 공급자. Gemini는 결재자용 요약의 "AI로 다시 쓰기"에만 쓰므로 다른 기능은 ['anthropic']만 넘긴다. */
   allow: readonly ('gemini' | 'anthropic')[] = ['gemini', 'anthropic'],
+  opts: { totalMs?: number } = {},
 ): AiProvider | null {
-  if (env.GEMINI_API_KEY && allow.includes('gemini')) return geminiProvider(env.GEMINI_API_KEY, [...new Set([env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS])], fetchImpl);
+  if (env.GEMINI_API_KEY && allow.includes('gemini')) return geminiProvider(env.GEMINI_API_KEY, [...new Set([env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS])], fetchImpl, opts.totalMs ?? GEMINI_TOTAL_MS);
   if (env.ANTHROPIC_API_KEY && allow.includes('anthropic')) return anthropicProvider(env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL ?? DEFAULT_MODEL, fetchImpl);
   return null;
 }
@@ -48,15 +52,18 @@ async function send(call: () => Promise<Response>): Promise<Response> {
 }
 
 /** 모델을 차례로 시도한다. 시간 초과·키 오류(400/403)는 다른 모델로 바꿔도 소용없어 바로 멈춘다. */
-function geminiProvider(key: string, models: string[], fetchImpl: typeof fetch): AiProvider {
+function geminiProvider(key: string, models: string[], fetchImpl: typeof fetch, totalMs: number): AiProvider {
   return {
     name: 'gemini',
     async complete(prompt: string): Promise<string> {
       const tried: string[] = [];
+      const deadline = Date.now() + totalMs; // 모델 재시도를 포함한 요청 전체의 시간 한도
       for (const model of models) {
         tried.push(model);
+        const left = deadline - Date.now();
+        if (left <= 0) throw new AiError('timeout', '시간 초과');
         try {
-          return await callGemini(key, model, prompt, fetchImpl);
+          return await callGemini(key, model, prompt, fetchImpl, left);
         } catch (e) {
           const retryable = e instanceof AiError && e.code === 'http_error' && e.status !== undefined && RETRY_STATUS.has(e.status);
           if (!retryable || model === models[models.length - 1]) {
@@ -70,13 +77,13 @@ function geminiProvider(key: string, models: string[], fetchImpl: typeof fetch):
   };
 }
 
-async function callGemini(key: string, model: string, prompt: string, fetchImpl: typeof fetch): Promise<string> {
+async function callGemini(key: string, model: string, prompt: string, fetchImpl: typeof fetch, timeoutMs: number): Promise<string> {
   // 키는 헤더(x-goog-api-key)로만 보낸다. URL 쿼리에 넣지 않는다.
   const res = await send(() => fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1024 } }),
-    signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   }));
   let body: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   try { body = (await res.json()) as typeof body; } catch { throw new AiError('http_error', '응답을 읽을 수 없음'); }

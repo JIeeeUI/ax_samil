@@ -22,7 +22,7 @@ const KEY = 'test-gemini-key-not-real';
 
 test('1) success: the sentence is used; the key goes in the header, never in the URL; default model is the free flash model', async () => {
   const d = await detail();
-  const { f, seen } = mockFetch(() => new Response(geminiBody('전속계약 연 280,000만 원은 10억 원을 넘어 CEO/이사회 상신 대상입니다.'), { status: 200 }));
+  const { f, seen } = mockFetch(() => new Response(geminiBody('{{건}}은(는) 요청액 {{요청액}}, {{승인경로}} 대상입니다. 근거는 {{근거}}입니다. 결정 기한은 {{결정기한}}입니다. {{성과}}. {{빠진정보}}.'), { status: 200 }));
   const p = createProvider({ GEMINI_API_KEY: KEY }, f)!;
   const r = await summarizeForApproval(d, p, { requested: true });
   expect(r).toMatchObject({ source: 'ai', note: '' });
@@ -77,8 +77,8 @@ test('5) verification failure: an invented number is not used (error "verify_fai
   const d = await detail();
   const { f } = mockFetch(() => new Response(geminiBody('고정 피는 99억 원이며 승인을 권고합니다.'), { status: 200 }));
   const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
-  expect(r).toMatchObject({ source: 'fallback', error: 'verify_failed', note: expect.stringContaining('AI 문장 숫자 불일치: 미반영') });
-  expect(r.note).toContain('걸린 값: 99억'); // 어떤 값이 걸렸는지 화면에 보인다
+  expect(r).toMatchObject({ source: 'fallback', error: 'verify_failed', note: expect.stringContaining('AI 문장 사실 검증 실패: 미반영') });
+  expect(r.note).toContain('필수 사실 누락'); // 어떤 값이 걸렸는지 화면에 보인다
 });
 
 test('an empty Gemini response is an http_error, not a blank sentence', async () => {
@@ -93,7 +93,7 @@ test('a busy model (503) is retried with the next free flash model and the answe
   let n = 0;
   const { f, seen } = mockFetch(() => (++n === 1
     ? new Response('{"error":{"code":503,"status":"UNAVAILABLE"}}', { status: 503 })
-    : new Response(geminiBody('전속계약 연 280,000만 원은 10억 원을 넘어 CEO/이사회 상신 대상입니다.'), { status: 200 })));
+    : new Response(geminiBody('{{건}}은(는) 요청액 {{요청액}}, {{승인경로}} 대상입니다. 근거는 {{근거}}입니다. 결정 기한은 {{결정기한}}입니다. {{성과}}. {{빠진정보}}.'), { status: 200 })));
   const r = await summarizeForApproval(d, createProvider({ GEMINI_API_KEY: KEY }, f), { requested: true });
   expect(r).toMatchObject({ source: 'ai', note: '' });
   expect(seen).toHaveLength(2);

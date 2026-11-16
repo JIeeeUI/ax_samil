@@ -21,13 +21,14 @@ test('without a provider the template is used and flagged AI 미사용', async (
   expect(r.error).toBeUndefined(); // AI를 요청하지 않았으면 오류가 아니다
   expect(r.text).toContain('CEO/이사회');
   expect(verifyFacts(r.text, buildFacts(d)).ok).toBe(true); // 템플릿은 항상 자기 사실과 일치
+  expect(r.text).toContain('빠진 정보'); // 템플릿도 빠진 정보를 말한다
 });
 
 test('an AI sentence with an invented number is not used', async () => {
   const d = await detail();
   const r = await summarizeForApproval(d, fake('고정 피는 99억 원이며 승인을 권고합니다.'));
   expect(r.source).toBe('fallback');
-  expect(r.note).toContain('AI 문장 숫자 불일치: 미반영');
+  expect(r.note).toContain('AI 문장 사실 검증 실패: 미반영');
   expect(r.unmatched!.length).toBeGreaterThan(0);
   expect(r.error).toBe('verify_failed');
 });
@@ -40,7 +41,7 @@ test('a throwing provider falls back to the template', async () => {
 
 test('a faithful AI sentence is used', async () => {
   const d = await detail();
-  const r = await summarizeForApproval(d, fake('전속계약 연 2,800,000,000원은 10억 원을 넘어 CEO/이사회 상신 대상입니다.'));
+  const r = await summarizeForApproval(d, fake('{{건}}은(는) 요청액 {{요청액}}, {{승인경로}} 대상입니다. 근거는 {{근거}}입니다. 결정 기한은 {{결정기한}}입니다. {{성과}}. {{빠진정보}}.'));
   expect(r).toMatchObject({ source: 'ai', note: '' });
 });
 
@@ -81,7 +82,8 @@ test('amounts in the new 만 원 notation pass the number check, including round
     const d = await detail(id);
     const tpl = (await summarizeForApproval(d, null)).text;
     expect(tpl).toContain('만 원');
-    const r = await summarizeForApproval(d, fake(tpl));
+    const r = await summarizeForApproval(d, fake('{{건}}은(는) 요청액 {{요청액}}, {{승인경로}} 대상입니다. 근거는 {{근거}}입니다. 결정 기한은 {{결정기한}}입니다. {{성과}}. {{빠진정보}}.'));
     expect(r.source).toBe('ai');
+    expect(r.text).toContain('만 원'); // 서버가 넣은 사실의 표기(만 원)
   }
 });

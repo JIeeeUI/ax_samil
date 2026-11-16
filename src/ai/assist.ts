@@ -35,6 +35,86 @@ export function buildFacts(d: CaseDetail): Facts {
   return { numbers: [...nums, ...tk.numbers.flatMap((n) => n.values)], dates };
 }
 
+/**
+ * 사실 자리표시자 방식. 수치·승인 경로·기한·빠진 정보는 서버가 정한 문자열이고, AI는 그 자리표시자({{요청액}} 등)를 넣어
+ * 문장의 표현만 쓴다. 서버가 자리표시자를 사실로 바꿔 최종 문장을 조립한다.
+ * 그래서 AI가 숫자를 바꾸거나(명목 ROAS를 실질로 쓰기), 빠진 정보가 있는데 "모두 확인됨"이라고 쓸 수 없다:
+ *  - 자리표시자 밖에 숫자·날짜가 있으면 버린다(허용 목록으로 맞는 숫자를 가려내는 방식이 아니다).
+ *  - 필수 사실 자리표시자가 하나라도 없으면 버린다(빠진 정보 포함).
+ *  - 확인 완료·문제 없음·승인 권고처럼 사실을 단정하거나 결정을 권하는 표현은 버린다.
+ */
+export interface SlotSpec { values: Record<string, string>; required: string[]; /** 문장 뒤에 서버가 그대로 붙이는 참고 문구 */ tail: string }
+
+const SLOT_RE = /\{\{([^{}]+)\}\}/g;
+const NUMERAL_RE = /[0-9０-９]|[일이삼사오육칠팔구]\s?[십백천만억]|[십백천만억]\s?원/g;
+/** 확인 완료·문제 없음·결정 권고 등 사실을 단정하는 표현. AI 문장에서는 쓸 수 없다(서버 사실만 말해야 한다). */
+const ASSERT_RE = /모두\s*확인|확인(이|은|을)?\s*(모두\s*)?(완료|끝났|됐|되었|됨)|확인됐|확인되었|추가\s*확인(은|이)?\s*(필요\s*(없|하지\s*않)|불필요)|확인할\s*(것|필요|사항)(이|은)?\s*없|빠진\s*정보(가|는|은)?\s*없|누락(이|은)?\s*없|(문제|이상|위험|걱정)(이|은)?\s*(전혀\s*)?없|안전합니다|승인(을|은)?\s*(권|추천|하시|해도|하세요|하십시오|바랍니다)|거절(을|은)?\s*(권|추천|하시|하세요|하십시오|바랍니다)|승인해야|거절해야/;
+
+export function checkSlotText(out: string, spec: SlotSpec): string[] {
+  const problems: string[] = [];
+  const found = [...out.matchAll(SLOT_RE)].map((m) => m[1].trim());
+  for (const k of found) if (!Object.hasOwn(spec.values, k)) problems.push(`알 수 없는 자리표시자 {{${k}}}`);
+  for (const k of spec.required) if (!found.includes(k)) problems.push(`필수 사실 누락: ${k}`);
+  const prose = out.replace(SLOT_RE, ' ');
+  for (const m of prose.match(NUMERAL_RE) ?? []) problems.push(`직접 쓴 숫자: ${m}`);
+  const digits = prose.match(/[-+]?\d[\d,.]*/g);
+  if (digits) problems.push(...digits.slice(0, 3).map((d) => `숫자 ${d}`));
+  const bad = prose.match(ASSERT_RE);
+  if (bad) problems.push(`단정·권고 표현: ${bad[0]}`);
+  if (out.length > 800) problems.push('너무 긴 문장');
+  return [...new Set(problems)];
+}
+
+export const assembleSlotText = (out: string, spec: SlotSpec): string =>
+  (out.replace(SLOT_RE, (_m, k: string) => spec.values[k.trim()]) + (spec.tail ? ` ${spec.tail}` : '')).replace(/\s+/g, ' ').trim();
+
+/** AI 호출 → 자리표시자 규칙 검사 → 통과하면 서버가 사실을 넣어 조립한 문장, 아니면 템플릿. */
+async function guarded(ai: AiProvider | null, spec: SlotSpec, instruction: string, template: string, requested = false): Promise<AssistResult> {
+  if (!ai) return { text: template, source: 'fallback', note: 'AI 미사용', ...(requested ? { error: 'no_key' as const } : {}) };
+  try {
+    const out = (await ai.complete(slotPrompt(instruction, spec))).trim();
+    const problems = out === '' ? ['빈 응답'] : checkSlotText(out, spec);
+    if (problems.length > 0) {
+      const shown = problems.slice(0, 5).join(', ');
+      return { text: template, source: 'fallback', note: `AI 문장 사실 검증 실패: 미반영 (사유: ${shown})`, error: 'verify_failed', unmatched: problems };
+    }
+    return { text: assembleSlotText(out, spec), source: 'ai', note: '' };
+  } catch (e) {
+    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error', ...(e instanceof AiError && e.status !== undefined ? { status: e.status } : {}) };
+  }
+}
+
+function slotPrompt(instruction: string, spec: SlotSpec): string {
+  const list = Object.entries(spec.values).map(([k, v]) => `{{${k}}} = ${v}`).join('\n');
+  return `${instruction}
+규칙: 사실은 아래 자리표시자로만 쓰세요. 자리표시자는 서버가 사실로 바꿔 넣으니 값을 풀어 쓰지 말고 {{이름}} 그대로 넣으세요.
+필수 자리표시자(모두 한 번 이상): ${spec.required.map((k) => `{{${k}}}`).join(', ')}
+숫자·날짜·금액을 직접 쓰지 마세요(쓰면 문장이 버려집니다). 승인·거절을 권하거나 결정하지 말고, 확인이 끝났다·문제없다·추가 확인이 필요 없다고 단정하지 마세요. 한국어 3~4문장으로 답하세요.
+자리표시자와 현재 값(참고):
+${list}`;
+}
+
+/** 빠진 정보 문장: 점검 결과 ④줄(서버 사실)에서 가져온다. */
+const missingText = (d: CaseDetail): string => d.check.lines[3].replace(/^④\s*/, '').split(' — ')[0];
+
+function summarySpec(d: CaseDetail): SlotSpec {
+  const i = d.item;
+  const values: Record<string, string> = {
+    건: `${i.influencer} ${i.id}(${i.kind === 'contract' ? '전속계약' : '기안'})`,
+    요청액: won(i.amount),
+    승인경로: i.routeLabel,
+    근거: d.reasons.join(' / '),
+    결정기한: `${i.effectiveDeadline}(남은 ${i.daysLeft}일)`,
+    빠진정보: missingText(d),
+  };
+  const required = ['건', '요청액', '승인경로', '근거', '결정기한', '빠진정보'];
+  if (d.row.과거실질ROAS !== '') {
+    values.성과 = `과거 실질 ROAS ${d.row.과거실질ROAS}(명목 ${d.row.과거명목ROAS})${i.realRank !== '' ? `, 실질 순위 ${i.realRank}위` : ''}`;
+    required.push('성과');
+  }
+  return { values, required, tail: [...(i.scale === '풀스케일' ? ['풀스케일 금액이라 표본 금액과 합산하지 않습니다.'] : []), ...d.notes].join(' ') };
+}
+
 function templateSummary(d: CaseDetail): string {
   const i = d.item;
   const parts = [
@@ -45,39 +125,25 @@ function templateSummary(d: CaseDetail): string {
   if (d.row.과거실질ROAS !== '') {
     parts.push(`과거 실질 ROAS ${d.row.과거실질ROAS}(명목 ${d.row.과거명목ROAS})${i.realRank !== '' ? `, 실질 순위 ${i.realRank}위` : ''}.`);
   }
+  parts.push(`${missingText(d)}.`);
   parts.push(...d.notes);
   return parts.join(' ');
 }
 
-/** AI 호출 → 숫자 대조 → 통과하면 AI 문장, 아니면 템플릿. */
-async function guarded(d: CaseDetail, ai: AiProvider | null, prompt: string, template: string, requested = false): Promise<AssistResult> {
-  if (!ai) return { text: template, source: 'fallback', note: 'AI 미사용', ...(requested ? { error: 'no_key' as const } : {}) };
-  try {
-    const out = (await ai.complete(prompt)).trim();
-    const check = out === '' ? { ok: false, unmatched: ['빈 응답'] } : verifyFacts(out, buildFacts(d));
-    if (!check.ok) {
-      const shown = check.unmatched.slice(0, 5).join(', ');
-      return { text: template, source: 'fallback', note: `AI 문장 숫자 불일치: 미반영${shown ? ` (걸린 값: ${shown})` : ''}`, error: 'verify_failed', unmatched: check.unmatched };
-    }
-    return { text: out, source: 'ai', note: '' };
-  } catch (e) {
-    return { text: template, source: 'fallback', note: `AI 호출 실패: ${(e as Error).message}`, error: e instanceof AiError ? e.code : 'http_error', ...(e instanceof AiError && e.status !== undefined ? { status: e.status } : {}) };
-  }
-}
-
-const RULES = '사실에 없는 숫자나 날짜를 만들거나 계산하지 말고, 승인·거절을 결정하거나 권하지 마세요. 날짜는 사실에 적힌 2026-07-17 형식 그대로 쓰고(7월 17일, 7/17로 바꾸지 마세요), 금액은 사실에 적힌 "1,680만 원" 표기 그대로 쓰며(억 단위로 바꾸지 마세요), 비율·순위·남은 일수도 사실의 숫자만 그대로 쓰세요. 한국어로 답하세요.';
-
 export function summarizeForApproval(d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
-  const t = templateSummary(d);
-  return guarded(d, ai, `결재자가 읽을 3문장 이내 상신 근거 요약을 쓰세요. 아래 사실만 사용합니다. ${RULES}\n사실: ${t}`, t, opts.requested);
+  return guarded(ai, summarySpec(d), '결재자가 읽을 3~4문장 상신 근거 요약의 표현만 쓰세요.', templateSummary(d), opts.requested);
 }
 
 export function draftInfoRequest(needed: string, d: CaseDetail, ai: AiProvider | null, opts: AssistOptions = {}): Promise<AssistResult> {
   const req = d.requests.find((r) => r.needed === needed && r.status === 'requested');
   const owner = req && isRole(req.ownerRole) ? ROLE_LABEL[req.ownerRole] : 'Masil 재무팀';
   const label = requestLabel(needed, 'ai');
-  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${whyOf(needed) ?? '이 정보가 없으면 판단을 확정할 수 없습니다.'}`;
-  return guarded(d, ai, `아래 사실로 확인 요청서 초안을 3문장 이내로 쓰세요. ${RULES}\n사실: ${t}`, t, opts.requested);
+  const why = whyOf(needed) ?? '이 정보가 없으면 판단을 확정할 수 없습니다.';
+  const t = `[확인 요청] ${d.item.influencer}(${d.item.id}) 건의 확인 요청 — ${label}. 담당: ${owner}.${req ? ` 회신 기한은 ${req.dueDate}입니다.` : ''} ${why}`;
+  const values: Record<string, string> = { 건: `${d.item.influencer}(${d.item.id}) 건`, 항목: label, 담당: owner, 이유: why, 기한: '회신 기한은 요청이 만들어질 때 정해집니다' };
+  const required = ['건', '항목', '담당', '이유'];
+  if (req) { values.기한 = `회신 기한은 ${req.dueDate}`; required.push('기한'); }
+  return guarded(ai, { values, required, tail: '' }, '확인 요청서 초안의 표현만 쓰세요.', t, opts.requested);
 }
 
 function templateCandidates(text: string): ReplyValues {
