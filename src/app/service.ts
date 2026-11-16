@@ -94,7 +94,11 @@ export interface CaseDetail {
   /** 엔진 결과로 미리 체크해 둘 반려 사유(설정에서 켜 둔 것만) */
   returnHints: ReturnReason[];
   /** 지금 반려할 수 있는지(왕복 1회, 실효 기한까지 5일 초과) */
-  returnState: { allowed: boolean; why: string | null; dueIfReturnedToday: IsoDate };
+  returnState: {
+    allowed: boolean; why: string | null; dueIfReturnedToday: IsoDate;
+    /** 재무 확인(상신) 때 의견이 필수인지. 반려할 수 없으면(왕복 1회를 썼거나 기한 5일 이하) 필수다. 화면과 서버가 이 값 하나를 쓴다. */
+    opinionRequired: boolean; opinionNotice: string | null;
+  };
 }
 
 interface Computed {
@@ -428,7 +432,7 @@ export class IntakeService {
     const allowed = used === 0 && canReturn(c.clock.today, eff);
     const why = used > 0 ? '반려는 한 번만 할 수 있어요(왕복 1회). 이번에는 의견을 붙여 상신하세요.'
       : !allowed ? '결정 기한까지 5일 이하라 반려할 수 없어요. 의견을 붙여 바로 상신하세요.' : null;
-    return { allowed, why, dueIfReturnedToday: returnDueDate(c.clock.today, eff) };
+    return { allowed, why, dueIfReturnedToday: returnDueDate(c.clock.today, eff), opinionRequired: !allowed, opinionNotice: why };
   }
 
   /** 점검 결과 네 줄(계산·판정·초안까지만 한다. 상신·승인은 사람이 한다). */
@@ -500,13 +504,12 @@ export class IntakeService {
 
   async confirmFinance(id: string, actor: Actor, opts: { opinion?: string } = {}): Promise<void> {
     const opinion = opts.opinion?.trim();
-    // 반려할 수 없는 경우(왕복 1회를 썼거나 기한까지 5일 이하)에는 의견을 붙여 상신해야 한다.
+    // 반려할 수 없는 경우(왕복 1회를 썼거나 기한까지 5일 이하)에는 의견을 붙여 상신해야 한다(화면 안내와 같은 규칙 returnState.opinionRequired).
     const st0 = await this.requireState(id);
     if (st0.status === 'finance_review' && !opinion) {
       const c0 = await this.compute();
-      if (!(await this.returnState(c0, id, c0.cases.find((k) => k.id === id)!.effectiveDeadline)).allowed && (await this.repo.listRevisions(id)).length > 0) {
-        throw new Error('OPINION_REQUIRED: 이미 반려한 건은 재무 의견을 붙여 상신해야 합니다');
-      }
+      const rs = await this.returnState(c0, id, c0.cases.find((k) => k.id === id)!.effectiveDeadline);
+      if (rs.opinionRequired) throw new Error(`OPINION_REQUIRED: ${rs.opinionNotice}`);
     }
     const c = await this.act(id, actor, 'confirm_finance', { rejudge: true, ...(opinion ? { detail: { financeOpinion: opinion } } : {}) });
     await this.ensureInfoRequests(c, id, false);

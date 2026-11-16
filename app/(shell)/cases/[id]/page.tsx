@@ -61,7 +61,7 @@ export default async function CasePage({
       </section>
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.allowed || !(cfg.showExtended || d.revisions.length > 0) ? '재무 의견(선택)' : '재무 의견(필수: 반려 없이 상신)'} required={!d.returnState.allowed && (cfg.showExtended || d.revisions.length > 0)} /><button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.opinionRequired ? '재무 의견(필수: 반려 없이 상신)' : '재무 의견(선택)'} title={d.returnState.opinionNotice ?? undefined} required={d.returnState.opinionRequired} /><button type="submit">재무 확인 완료</button></form>}
           {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있습니다(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 됩니다.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했습니다</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">

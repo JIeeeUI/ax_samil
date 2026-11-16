@@ -1,4 +1,5 @@
 import type { RouteLevel } from '../engine/routing.js';
+import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import { decisionRole, isRole, type Role } from './roles.js';
 
@@ -62,7 +63,8 @@ function assertHold(hold: HoldInput | undefined, today: IsoDate | undefined): vo
   if (!hold) throw bad('보류 정보 없음');
   if (!hold.needed || hold.needed.trim() === '') throw bad('필요한 정보 없음');
   if (!isRole(hold.ownerRole)) throw bad('담당 역할 없음');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(hold.dueDate ?? '')) throw bad('기한 없음');
+  // 형식만이 아니라 실제 달력 날짜여야 한다(2026-99-99, 2026-02-30 거부).
+  if (!isIsoDate(hold.dueDate ?? '')) throw bad('기한이 없거나 실제 달력 날짜가 아님');
   if (today && hold.dueDate < today) throw bad(`기한 ${hold.dueDate}이 오늘 ${today}보다 이전`);
 }
 
