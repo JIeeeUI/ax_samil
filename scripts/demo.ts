@@ -1,9 +1,10 @@
 /**
  * 시연 재현. 사용: npm run demo -- normal|change|shortage|all (all = 앞의 3건), check(상신 전 점검 시연)
  * 로컬 메모리 DB(PGlite)에서 실행하며 시나리오마다 처음부터 초기화한다. 원본 데이터룸은 읽기만 한다.
- * DATABASE_URL이 있으면 그 DB를 초기화하므로 운영 DB에는 쓰지 마세요.
+ * DATABASE_URL이 있으면 그 DB를 초기화하므로 기본으로 실행을 거부한다(DEMO_ALLOW_DB_RESET=yes를 명시해야 실행).
  */
 import { runScenario, type ScenarioName } from '../src/app/demo.js';
+import { demoDbDecision } from '../src/app/demoGuard.js';
 import { IntakeService } from '../src/app/service.js';
 import { loadDataRoom } from '../src/engine/dataRoom.js';
 import { openDb } from '../src/store/db.js';
@@ -18,8 +19,13 @@ if (todo.length === 0) {
   process.exit(2);
 }
 
+const guard = demoDbDecision(process.env);
+if (!guard.allowed) {
+  console.error(guard.message);
+  process.exit(2);
+}
 const { DATABASE_URL } = process.env;
-if (DATABASE_URL) console.warn('경고: DATABASE_URL이 설정되어 있어 해당 DB를 초기화합니다.');
+if (DATABASE_URL) console.warn('경고: DEMO_ALLOW_DB_RESET=yes가 지정돼 DATABASE_URL의 DB를 초기화합니다.');
 const db = await openDb({ DATABASE_URL, NODE_ENV: 'development' });
 const svc = new IntakeService({ repo: new Repo(db), room: loadDataRoom() });
 await svc.reset();
