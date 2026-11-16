@@ -3,7 +3,8 @@ import { getService } from '../../src/app/instance.js';
 import type { TodayItem } from '../../src/app/service.js';
 import { Flash } from '../components.js';
 import { formal } from '../formal.js';
-import { CHECK_LABEL, CHECK_SHORT, STATUS_PLAIN, STATUS_SHORT, WHO_DECIDES, WHO_SHORT, daysLeftText, koDate, nextStep, shortWon } from '../plain.js';
+import { CHECK_LABEL, CHECK_SHORT, STATUS_PLAIN, STATUS_SHORT, WHO_DECIDES, WHO_SHORT, daysLeftText, koDate, nextStep, noTurnNotice, shortWon } from '../plain.js';
+import { Glossary } from '../glossary.js';
 import { currentRole } from '../session.js';
 import { CashTimeline } from '../timeline.js';
 import { TodayList } from '../today-list.js';
@@ -49,6 +50,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   // v.items는 결정 기한이 이른 순으로 정렬되어 온다.
   const rows = v.items.map((i) => ({ i, kind: nextStep(i, role).kind }));
   const count = { open: rows.filter((r) => r.kind !== 'done').length, mine: rows.filter((r) => r.kind === 'mine').length, done: rows.filter((r) => r.kind === 'done').length };
+  const noTurn = noTurnNotice(v.items);
   const shown = rows.filter((r) => (view === 'open' ? r.kind !== 'done' : view === 'mine' ? r.kind === 'mine' : r.kind === 'done'));
 
   return (
@@ -61,6 +63,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         comparison={v.cashComparison}
       />
 
+      {count.mine === 0 && noTurn && <p className="line noturn" role="status">{noTurn}</p>}
+
       <div className="listhead">
         <h1>할 일</h1>
         <nav aria-label="보기 선택" className="views">
@@ -72,9 +76,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </nav>
       </div>
 
-      <TodayList key={view} rows={shown.map(({ i, kind }) => toRow(i, kind === 'mine'))} tabLabel={VIEWS.find(([k]) => k === view)![1]} />
+      <TodayList key={view} emptyText={view === 'mine' ? (noTurn ?? '지금 내 차례인 건이 없습니다.') : undefined} rows={shown.map(({ i, kind }) => toRow(i, kind === 'mine'))} tabLabel={VIEWS.find(([k]) => k === view)![1]} />
 
       {v.openRequests > 0 && <p className="line"><Link href="/requests">답을 기다리는 확인 요청 {v.openRequests}건</Link></p>}
+      <Glossary />
       <p className="meta">캠페인 요청액(표본 자료)과 연간 계약 금액(회사 실제 규모)은 더하지 않고 따로 봅니다.</p>
     </>
   );

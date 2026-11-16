@@ -11,7 +11,7 @@ const ERROR_TEXT: Record<AiErrorCode, string> = {
   no_key: 'AI 키가 설정되지 않아 기본 문장을 보여 줍니다.',
   timeout: 'AI 응답이 늦어 기본 문장을 보여 줍니다.',
   http_error: 'AI 연결에 실패해 기본 문장을 보여 줍니다.',
-  verify_failed: 'AI 문장의 숫자가 맞지 않아 기본 문장을 보여 줍니다.',
+  verify_failed: 'AI 문장이 확인된 사실과 맞지 않아 기본 문장을 보여 줍니다.',
 };
 
 /** 결재자용 요약 문장. AI를 요청하면 응답을 기다리는 동안 이 부분만 '쓰는 중'으로 보이고, 실패해도 기본 문장이나 안내가 나온다. */

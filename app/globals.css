@@ -291,3 +291,13 @@ ol.hist > li:last-child { border-bottom: 0; }
 .h-who { color: var(--muted); font-size: 0.86rem; }
 .h-when { flex: none; text-align: right; display: flex; flex-direction: column; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .h-when .num { font-weight: 600; font-size: 0.92rem; }
+
+/* 내 차례가 없을 때 안내, 용어 풀이 */
+.noturn { color: var(--ink); margin: 12px 0 0; }
+details.glossary { margin: 14px 0 0; }
+.glossary dl { margin: 8px 0 0; }
+.glossary dl > div { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.glossary dl > div:last-child { border-bottom: 0; }
+.glossary dt { flex: none; width: 8.5em; font-weight: 600; }
+.glossary dd { margin: 0; color: var(--muted); font-size: 0.92rem; }
+@media (max-width: 720px) { .glossary dl > div { flex-direction: column; gap: 2px; } .glossary dt { width: auto; } }

@@ -10,6 +10,7 @@ import {
 } from '../../../actions.js';
 import { ACTION_LABEL, Badge, ESCALATION_LABEL, Flash, pct, routeTone, won } from '../../../components.js';
 import { CashNote, CheckList } from '../../../check-ui.js';
+import { Glossary } from '../../../glossary.js';
 import { formal } from '../../../formal.js';
 import { CHECK_LABEL, FLOW_STEPS, STATUS_PLAIN, neededLabel, WHO_DECIDES, daysLeftText, flowIndex, koDate, nextStep, shortWon } from '../../../plain.js';
 import { currentRole } from '../../../session.js';
@@ -54,14 +55,41 @@ export default async function CasePage({
 
       <div className="cols"><div className="col">
 
-      <section className="card-block">
-        <h2>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : d.check.label === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</h2>
-        <CheckList lines={d.check.lines} />
-        <p className="meta">점검은 계산·판정까지만 합니다. 상신은 사람이 누르고, 되돌릴 수 없습니다.</p>
+      <section className="summary">
+        <ul className="facts">
+          <li><span className="k">금액</span><span className="v">{shortWon(i.amount)}<small>{i.scale === '풀스케일' ? '1년치 고정 비용' : '캠페인 한 건'}</small></span></li>
+          <li><span className="k">결정하는 사람</span><span className="v"><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
+            {i.boardDate && <small>기한 전 이사회 {koDate(i.boardDate)}</small>}</span></li>
+          <li><span className="k">결정 기한</span><span className="v">{koDate(i.effectiveDeadline)}<small>{daysLeftText(i.daysLeft)}</small></span></li>
+          <li><span className="k">주의할 점{att.count > 0 ? ` ${att.count}가지` : ''}</span>
+            <span className="v">{att.count === 0 ? '없습니다' : (
+              <ul className="attn">{att.items.map((a) => (
+                <li key={a.code}>
+                  <span className={`tier tier-${a.tier}`} aria-label={`중요도 ${TIER_LABEL[a.tier]}`}>{TIER_LABEL[a.tier]}</span>
+                  <div className="attn-body">
+                    <span>{a.text}</span>
+                    {a.details.length > 0 && (
+                      <details className="more"><summary>상세</summary>{a.details.map((x) => <p key={x}>{formal(x)}</p>)}</details>
+                    )}
+                  </div>
+                </li>
+              ))}</ul>
+            )}</span></li>
+        </ul>
+        {att.count > 0 && <p className="meta">중요도: 상 → 중 → 하 순서로 보여 줍니다. 같은 뜻의 경고는 한 줄로 묶었습니다.</p>}
+        {i.settlementDate !== '' && i.settlementDate < i.deadline && <p className="meta">계약 확정일은 {koDate(i.deadline)}이지만, 돈이 먼저 나가는 날({koDate(i.settlementDate)})이 있어 그 전에 결정해야 합니다.</p>}
       </section>
+
       {step.kind === 'mine' && (
         <div className="cta">
-          {i.status === 'finance_review' && role === 'finance' && <form action={actConfirmFinance}>{hidden}<input name="opinion" placeholder={d.returnState.opinionRequired ? '재무 의견(필수: 반려 없이 상신)' : '재무 의견(선택)'} title={d.returnState.opinionNotice ?? undefined} required={d.returnState.opinionRequired} /><button type="submit">재무 확인 완료</button></form>}
+          {i.status === 'finance_review' && role === 'finance' && (
+            <form action={actConfirmFinance} className="hold">{hidden}
+              <label><span>재무 의견 <span className={d.returnState.opinionRequired ? 'accent' : 'muted'}>({d.returnState.opinionRequired ? '필수' : '선택'})</span></span>
+                <input name="opinion" required={d.returnState.opinionRequired} aria-describedby={d.returnState.opinionNotice ? 'opinion-notice' : undefined} /></label>
+              {d.returnState.opinionNotice && <p id="opinion-notice" className="meta">{formal(d.returnState.opinionNotice)}</p>}
+              <button type="submit">재무 확인 완료</button>
+            </form>
+          )}
           {i.status === 'routed' && (role === 'marketing' || role === 'finance') && <form action={actSubmit}>{hidden}{d.check.label === 'waiting_info' && <p className="meta">아직 빠진 정보가 있습니다(위 점검 ④). 그래도 상신하면 결재자가 정보 없이 판단하게 됩니다.</p>}<label><input type="checkbox" name="confirm" value="yes" required /> 상신하면 되돌릴 수 없다는 것을 확인했습니다</label><button type="submit">{WHO_DECIDES[i.routeLevel]}에게 올리기</button></form>}
           {i.status === 'submitted' && role === decider && canSecond && (
             <div className="two">
@@ -74,6 +102,12 @@ export default async function CasePage({
           )}
         </div>
       )}
+      <details className="fold"><summary><span>상신 전 점검 {d.check.label && <Badge tone={d.check.label === 'ready' ? 'green' : d.check.label === 'waiting_info' ? 'amber' : d.check.label === 'finance_pending' ? 'blue' : 'gray'}>{CHECK_LABEL[d.check.label]}</Badge>}</span></summary>
+        <div className="panel">
+          <CheckList lines={d.check.lines} />
+          <p className="meta">점검은 계산·판정까지만 합니다. 상신은 사람이 누르고, 되돌릴 수 없습니다.</p>
+        </div>
+      </details>
       {i.status === 'submitted' && role === decider && canSecond && (
         <details className="fold"><summary>정보가 더 필요하면 보류하기</summary>
           <form action={actDecide} className="hold">{hidden}<input type="hidden" name="decision" value="hold" />
@@ -190,31 +224,6 @@ export default async function CasePage({
         </section>
       )}
 
-      <section className="summary">
-        <ul className="facts">
-          <li><span className="k">금액</span><span className="v">{shortWon(i.amount)}<small>{i.scale === '풀스케일' ? '1년치 고정 비용' : '캠페인 한 건'} · {won(i.amount)}</small></span></li>
-          <li><span className="k">결정하는 사람</span><span className="v"><Badge tone={routeTone(i.routeLevel)}>{WHO_DECIDES[i.routeLevel]}{i.provisional ? ' (잠정)' : ''}</Badge>
-            {i.boardDate && <small>기한 전 이사회 {koDate(i.boardDate)}</small>}</span></li>
-          <li><span className="k">결정 기한</span><span className="v">{koDate(i.effectiveDeadline)}<small>{daysLeftText(i.daysLeft)}</small></span></li>
-          <li><span className="k">주의할 점{att.count > 0 ? ` ${att.count}가지` : ''}</span>
-            <span className="v">{att.count === 0 ? '없습니다' : (
-              <ul className="attn">{att.items.map((a) => (
-                <li key={a.code}>
-                  <span className={`tier tier-${a.tier}`} aria-label={`중요도 ${TIER_LABEL[a.tier]}`}>{TIER_LABEL[a.tier]}</span>
-                  <div className="attn-body">
-                    <span>{a.text}</span>
-                    {a.details.length > 0 && (
-                      <details className="more"><summary>상세</summary>{a.details.map((x) => <p key={x}>{formal(x)}</p>)}</details>
-                    )}
-                  </div>
-                </li>
-              ))}</ul>
-            )}</span></li>
-        </ul>
-        {att.count > 0 && <p className="meta">중요도: 상 → 중 → 하 순서로 보여 줍니다. 같은 뜻의 경고는 한 줄로 묶었습니다.</p>}
-        {i.settlementDate !== '' && i.settlementDate < i.deadline && <p className="meta">계약 확정일은 {koDate(i.deadline)}이지만, 돈이 먼저 나가는 날({koDate(i.settlementDate)})이 있어 그 전에 결정해야 합니다.</p>}
-      </section>
-
       {d.escalation && (
         <div className="flash flash-error">
           <strong>기한이 코앞입니다.</strong> 결정 없이 {koDate(i.effectiveDeadline)}이 지나면 그대로 확정(또는 집행)됩니다. 선택지: {d.escalation.map((o) => ESCALATION_LABEL[o]).join(' · ')}
@@ -283,6 +292,7 @@ export default async function CasePage({
           </form>
         </details>
       )}
+      <Glossary />
       </div></div>
     </>
   );

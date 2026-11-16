@@ -42,7 +42,7 @@ export function matches(row: ListRow, query: string): boolean {
   return tokens.every((t) => hay.includes(t));
 }
 
-export function TodayList({ rows, tabLabel }: { rows: ListRow[]; tabLabel: string }) {
+export function TodayList({ rows, tabLabel, emptyText }: { rows: ListRow[]; tabLabel: string; emptyText?: string }) {
   const [q, setQ] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const active = q.trim() !== '';
@@ -111,7 +111,7 @@ export function TodayList({ rows, tabLabel }: { rows: ListRow[]; tabLabel: strin
               <td colSpan={8}>
                 {active ? (
                   <>&lsquo;{q.trim()}&rsquo;에 맞는 건이 없습니다. <button type="button" className="sbtn" onClick={clear}>검색 지우기</button></>
-                ) : '해당하는 건이 없습니다.'}
+                ) : (emptyText ?? '해당하는 건이 없습니다.')}
               </td>
             </tr>
           )}

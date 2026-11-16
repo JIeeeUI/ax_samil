@@ -110,3 +110,42 @@ export const WHO_SHORT: Record<string, string> = {
   MASIL_CEO: 'Masil 대표',
   MARKETING: '마케팅 전결',
 };
+
+/** 이 건이 지금 누구(무엇)를 기다리고 있는지 짧은 이름. 끝난 건이면 null. */
+export function waitingOn(item: TodayItem): string | null {
+  const s = item.status;
+  if (TERMINAL.has(s) || s === 'closed') return null;
+  switch (s) {
+    case 'finance_review': return '재무 확인';
+    case 'routed': return '상신';
+    case 'submitted': return item.primaryPending ? `${ROLE_LABEL.masil_ceo}의 1차 검토` : `${ROLE_LABEL[decisionRole(item.routeLevel)]}의 결정`;
+    case 'on_hold': return '확인 요청 회신';
+    case 'revision': return '마케팅의 보완 답변';
+    case 'consulting': return '재무·마케팅 협의';
+    case 'rejected': return '마케팅의 후속 처리(재상신·종결)';
+    default: return STATUS_PLAIN[s] ?? s;
+  }
+}
+
+/** "내 차례"가 없을 때 보여 줄 한 문장: 무엇을 몇 건 기다리는지와 다음에 어떻게 되는지. */
+export function noTurnNotice(items: TodayItem[]): string | null {
+  const counts = new Map<string, number>();
+  for (const i of items) {
+    const w = waitingOn(i);
+    if (w) counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  const parts = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([w, n]) => `${w} 대기 ${n}건`);
+  return `지금 내 차례인 건이 없습니다. 현재 ${parts.join(' · ')}입니다. 처리되면 내 차례에 표시됩니다.`;
+}
+
+/** 업무 용어 짧은 풀이 */
+export const GLOSSARY: [string, string][] = [
+  ['상신', '결재할 사람에게 안건을 올려 결정을 요청하는 일입니다. 올린 뒤에는 되돌릴 수 없습니다.'],
+  ['기안', '결정을 요청하는 안건 문서입니다. 이 화면에서는 캠페인 확대 요청이 기안입니다.'],
+  ['실효 결정 기한', '계약 확정일과 돈이 먼저 나가는 날 중 이른 날입니다. 이 날까지 결정해야 합니다.'],
+  ['명목 ROAS', '광고비 대비 매출입니다(쿠폰·반품 등 다른 비용은 빼지 않습니다).'],
+  ['실질 ROAS', '쿠폰·반품·광고비 등 들어간 비용을 모두 뺀 뒤의 효과입니다. 0보다 작으면 손해입니다.'],
+  ['LC-0001', '현금이 들어오는 시점을 정하는 결제 조건 항목입니다(통보서 90일, 재무 가정 45일). 이 값에 따라 현금 부족 구간이 달라집니다.'],
+  ['현금 부족 구간', '회사 현금이 지켜야 하는 최소 금액 밑으로 내려가는 기간입니다. 이 기간에 돈이 나가는 건은 CEO/이사회가 결정합니다.'],
+];

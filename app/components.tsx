@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { formal } from './formal.js';
+import { friendlyError } from './formal.js';
 import type { ScenarioId } from '../src/engine/assumptions.js';
 import { formatMan } from '../src/format.js';
 import type { Status } from '../src/workflow/status.js';
@@ -41,7 +41,7 @@ export function routeTone(_level: string): 'gray' {
 }
 
 export function Flash({ error }: { error?: string }) {
-  return error ? <div role="alert" className="flash flash-error">오류: {formal(error)}</div> : null;
+  return error ? <div role="alert" className="flash flash-error"><strong>처리하지 못했습니다.</strong> {friendlyError(error)}</div> : null;
 }
 
 export function stageTone(stage: string): 'red' | 'amber' | 'blue' | 'gray' {
