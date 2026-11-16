@@ -56,6 +56,11 @@ export class Repo {
 
   async migrate(): Promise<void> { await this.db.exec(SCHEMA_SQL); }
 
+  /** 같은 트랜잭션에 묶인 저장소로 fn을 실행한다. fn이 실패하면 안의 쓰기가 모두 취소된다. */
+  withTransaction<T>(fn: (repo: Repo) => Promise<T>): Promise<T> {
+    return this.db.transaction((tx) => fn(new Repo(tx)));
+  }
+
   async resetAll(): Promise<void> {
     await this.db.exec('truncate table clock, settings, case_state, events, info_requests, alerts, review1, revisions, notices restart identity');
   }

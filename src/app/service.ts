@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { SCENARIOS, THRESHOLDS, type AssumptionSet, type ScenarioId } from '../engine/assumptions.js';
 import { addDays, daysBetween, isIsoDate } from '../engine/calendar.js';
 import { buildCases, INF001_CONTRACT, planTotal, type Case } from '../engine/cases.js';
@@ -153,10 +154,37 @@ function applyAdjustments(room: DataRoom, adj: Adjustments): DataRoom {
   };
 }
 
+/**
+ * 상태·요청·이력을 바꾸는 공개 메서드. 각각 한 DB 트랜잭션 안에서 실행되어, 중간에 실패하면 상태 전이·확인 요청·이력이 함께 취소된다.
+ * (예외를 잡는 것은 롤백이 아니다. 같은 트랜잭션으로 묶어야 상태만 바뀌고 기록이 없는 일이 생기지 않는다.)
+ */
+export const ATOMIC_METHODS = [
+  'reset', 'advanceClock', 'confirmFinance', 'financeReturn', 'replyRevision', 'submit', 'resubmit', 'close', 'decide',
+  'sendNotice', 'recordNotice', 'proposeContractChange', 'replyInfoRequest', 'setConfig', 'primaryEscalate', 'primaryHold',
+  'primaryReturn', 'setScenario',
+] as const;
+
 export class IntakeService {
-  private repo: Repo;
+  private baseRepo: Repo;
   private room: DataRoom;
-  constructor(deps: { repo: Repo; room: DataRoom }) { this.repo = deps.repo; this.room = deps.room; }
+  /** 트랜잭션 안에서는 그 트랜잭션에 묶인 저장소, 밖에서는 기본 저장소(요청마다 따로라 동시 처리에도 섞이지 않는다) */
+  private txRepo = new AsyncLocalStorage<Repo>();
+  private get repo(): Repo { return this.txRepo.getStore() ?? this.baseRepo; }
+  constructor(deps: { repo: Repo; room: DataRoom }) {
+    this.baseRepo = deps.repo;
+    this.room = deps.room;
+    const self = this as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
+    for (const name of ATOMIC_METHODS) {
+      const original = self[name].bind(this);
+      self[name] = (...args: unknown[]) => this.atomic(() => original(...args));
+    }
+  }
+
+  /** 이미 트랜잭션 안이면 합류하고, 아니면 새 트랜잭션을 연다. */
+  private atomic<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.txRepo.getStore()) return fn();
+    return this.baseRepo.withTransaction((tx) => this.txRepo.run(tx, fn));
+  }
 
   private adjustedRoom(adj: Adjustments | null): DataRoom { return applyAdjustments(this.room, adj ?? {}); }
 
