@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "demo:snapshot": "tsx scripts/build-demo-snapshot.ts",
+    "demo:dev": "next dev demo",
+    "demo:build": "next build demo"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
