@@ -86,7 +86,16 @@ function spendByCampaign(room: PerfRoom): Map<string, number> {
   return m;
 }
 
+/**
+ * 미리 계산한 캠페인 성과로 계산을 대신하는 장치(원본 행을 싣지 않는 정적 시연판용).
+ * 인플루언서 성과는 이 캠페인 성과와 기안 표(요청 비중)로 다시 만들어지므로 따로 대신하지 않는다.
+ */
+export type CampaignPerformanceProvider = (a: AssumptionSet) => CampaignPerf[];
+let campaignProvider: CampaignPerformanceProvider | null = null;
+export function installCampaignPerformanceProvider(p: CampaignPerformanceProvider | null): void { campaignProvider = p; }
+
 export function computeCampaignPerformance(room: PerfRoom, a: AssumptionSet): CampaignPerf[] {
+  if (campaignProvider) return campaignProvider(a);
   const acc = accumulateByCampaign(room, a);
   const spend = spendByCampaign(room);
   return room.masters.campaigns.map((c) => {

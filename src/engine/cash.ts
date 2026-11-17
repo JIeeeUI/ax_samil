@@ -20,11 +20,20 @@ export interface CashResult {
 const LC0001_CHANNEL = 'CH-03';
 
 /**
+ * 미리 계산한 결과로 현금 시뮬레이션을 대신하는 장치(원본 행을 싣지 않는 정적 시연판용).
+ * 설치하지 않으면 아래 계산이 그대로 돈다.
+ */
+export type CashProvider = (a: AssumptionSet, horizonEnd: IsoDate) => CashResult;
+let cashProvider: CashProvider | null = null;
+export function installCashProvider(p: CashProvider | null): void { cashProvider = p; }
+
+/**
  * 향후 현금 재시뮬레이션 (calculation_definitions 1.2, covenant_terms_ms).
  * 풀스케일 계열만 받는다(표본 계열과 섞지 않음).
  * 기준일 이후 이미 잡힌 회수·지급 일정만 합산하므로 새 매출의 회수는 들어가지 않는 보수적 전망이다.
  */
 export function simulateCash(full: FullTables, a: AssumptionSet, horizonEnd: IsoDate = '2026-09-30'): CashResult {
+  if (cashProvider) return cashProvider(a, horizonEnd);
   const asOf = a.asOf;
   const events = new Map<IsoDate, number>();
   const put = (date: IsoDate, amount: number) => {
