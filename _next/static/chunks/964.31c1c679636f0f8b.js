@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[964],{8964:(e,r,t)=>{t.d(r,{createRequire:()=>o});let n=e=>()=>{throw Error("브라우저에서는 ".concat(e,"을(를) 쓸 수 없습니다"))},o=n("node:module");new Proxy({},{get:(e,r)=>"then"===r?void 0:n(String(r))})}}]);
