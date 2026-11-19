@@ -33,7 +33,8 @@ export function RoleSwitch({
     <form action={action} className="roleswitch">
       <input type="hidden" name="back" value={path} />
       <label><span>보는 사람</span>
-        <select name="role" defaultValue={role}>
+        {/* key: 정적 데모는 미리 그린 화면(마케팅)에 저장된 역할이 나중에 읽혀, 비제어 select가 따라가지 못한다 */}
+        <select name="role" key={role} defaultValue={role}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </label>
