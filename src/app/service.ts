@@ -7,6 +7,7 @@ import { cashComparison, type CashComparison } from '../engine/cashGap.js';
 import { historyEntry, type HistoryEntry } from './history.js';
 import { buildAttention, type Attention } from '../workflow/attention.js';
 import { terminationPenalty } from '../engine/contract.js';
+import { daysLeftText } from '../ai/assist.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
 import type { DataRoom, IsoDate } from '../engine/types.js';
@@ -92,6 +93,8 @@ export interface CaseDetail {
   notice: NoticeRow | null;
   /** 아직 결정 전인 계약이 통보 없이 기한을 넘기면 자동 갱신된다는 경고 */
   noticeWarning: string | null;
+  /** 결정 없이 기한이 지나 자동 확정된 계약의 결과(갱신 기간·고정 피·위약금). 그 외에는 null */
+  autoRenewResult: string | null;
   /** 엔진 결과로 미리 체크해 둘 반려 사유(설정에서 켜 둔 것만) */
   returnHints: ReturnReason[];
   /** 지금 반려할 수 있는지(왕복 1회, 실효 기한까지 5일 초과) */
@@ -129,6 +132,27 @@ function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boo
 function autoRenewText(kind: string, status: Status, daysLeft: number, effectiveDeadline: IsoDate): string | null {
   return kind === 'contract' && needsEscalation(status) && daysLeft <= 3 && daysLeft >= 0
     ? `통보 미완료 시 자동 갱신: 결정 기한 ${effectiveDeadline}까지 결정하고 통보하지 않으면 현재 조건으로 자동 갱신됩니다.` : null;
+}
+
+/** 필수 통보를 마감일(포함)까지 보냈는지. 수령 증빙 여부는 따로 안내하고, 발송 사실 자체를 기한 이행으로 본다 [교육용 가정]. */
+function noticeSentInTime(n: NoticeRow | null): boolean {
+  return !!n && n.required && (n.status === 'sent' || n.status === 'done') && !!n.sentDate && n.sentDate <= n.dueDate;
+}
+
+const manWon = (krw: number) => `${Math.round(krw / 10_000).toLocaleString('ko-KR')}만 원`;
+
+/** 마감일이 지났는데 필수 통보가 아직 열려 있을 때의 경고(승인·종결 상태 포함). */
+function missedNoticeText(n: NoticeRow | null, today: IsoDate): string | null {
+  if (!n || !n.required || n.status !== 'open' || today <= n.dueDate) return null;
+  const what = n.kind === 'terminate' ? '해지' : '변경';
+  return `필수 통보 기한 경과: ${what} 통보를 ${n.dueDate}까지 보내지 않았습니다. 통보하지 않으면 현재 조건으로 자동 갱신된 것으로 봅니다.`;
+}
+
+/** 결정 없이 기한이 지나 자동 확정된 계약에 보여 줄 결과(갱신 기간·고정 피·위약금). 위약금은 통보서 조건이며 계약 원문은 확인되지 않았다. */
+function autoRenewResultText(kind: string, status: Status, amount: number, effectiveDeadline: IsoDate): string | null {
+  if (kind !== 'contract' || status !== 'overdue') return null;
+  const penalty = terminationPenalty(amount, '2026-09-01');
+  return `결정·통보 기한 ${effectiveDeadline}이 지나 현재 조건으로 자동 갱신된 것으로 봅니다. 연 ${manWon(amount)}의 고정 피가 1년간 이어지고, 갱신 직후 해지하면 위약금 ${manWon(penalty)}(남은 고정 피의 50%)이 붙을 수 있습니다. 통보서 조건이며 계약 원문은 확인되지 않았습니다.`;
 }
 
 function requireReason(reason: string | undefined): void {
@@ -293,9 +317,12 @@ export class IntakeService {
     const activated = (await this.repo.getSetting<IsoDate>('alertPlanActivatedOn')) ?? c.clock.asOf;
     for (const st of await this.repo.listStates()) {
       let status = st.status as Status;
+      if (st.caseId === CONTRACT_ID && (await this.guardMissedNotice(c, st.status as Status))) raised.push({ caseId: st.caseId, stage: 'overdue', kind: 'warning' });
       if (TERMINAL.has(status)) continue;
       const k = c.cases.find((x) => x.id === st.caseId)!;
       const stages = stagesDue(today, k.effectiveDeadline);
+      // 해지(거절) 통보를 기한 안에 이미 보냈다면 자동 갱신으로 기록하지 않는다. 미발송이면 그대로 자동 확정된다.
+      if (stages.includes('overdue') && st.caseId === CONTRACT_ID && status === 'rejected' && noticeSentInTime(await this.repo.getNotice(CONTRACT_ID))) continue;
       if (stages.includes('overdue')) {
         const next = transition({ status, routeLevel: st.routeLevel as RouteLevel }, 'expire', 'system');
         if (!(await this.repo.transitionState(st.caseId, st.status, { status: next, routeLevel: st.routeLevel, updatedBusinessDate: today }))) continue;
@@ -311,6 +338,19 @@ export class IntakeService {
       raised.push(...(await this.runPlan(c, cfg, activated, { ...st, status }, k)));
     }
     return raised;
+  }
+
+  /**
+   * 필수 통보(해지·변경)를 마감일까지 보내지 않았다면 알림과 기록을 한 번만 남긴다.
+   * 승인·종결 같은 끝난 상태에서도 외부 통보는 끝나지 않았으므로 기한 감시에서 빼지 않는다.
+   */
+  private async guardMissedNotice(c: Computed, status: Status): Promise<boolean> {
+    const n = await this.repo.getNotice(CONTRACT_ID);
+    if (!n || !n.required || n.status !== 'open' || c.clock.today <= n.dueDate) return false;
+    if (status === 'overdue') return false; // 결정 없이 자동 확정된 건은 따로 안내한다
+    const inserted = await this.repo.insertAlertIfAbsent({ caseId: CONTRACT_ID, stage: 'overdue', kind: 'notice_missed', businessDate: c.clock.today, payload: { noticeKind: n.kind, dueDate: n.dueDate } });
+    if (inserted) await this.log(c, CONTRACT_ID, 'system', 'notice_missed', { simulated: false, detail: { message: '필수 통보 기한 경과', kind: n.kind, dueDate: n.dueDate } });
+    return inserted;
   }
 
   /** 반려 회신 기한까지 답이 없으면 "미응답"으로 표시하고 재무 의견을 붙여 결재자에게 전달한다(결정이 아니라 전달). */
@@ -432,7 +472,7 @@ export class IntakeService {
       group: c.cases.filter((x) => x.linkGroup === k.linkGroup).map((x) => ({ id: x.id, kind: x.kind, status: sm.get(x.id)!.status })),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([key, v]) => [key, v.status]))).filter((w) => w.influencerId === k.linkGroup),
       notes, penalty: k.kind === 'contract' ? terminationPenalty(k.amount, '2026-09-01') : null,
-      escalation: esc ? ESCALATION_OPTIONS : null, alerts,
+      escalation: esc && !TERMINAL.has(item.status) ? ESCALATION_OPTIONS : null, alerts,
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
       cashComparison: cashComparison(this.room.full, c.a),
@@ -440,7 +480,9 @@ export class IntakeService {
       check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
-      noticeWarning: autoRenewText(k.kind, item.status, item.daysLeft, item.effectiveDeadline),
+      noticeWarning: autoRenewText(k.kind, item.status, item.daysLeft, item.effectiveDeadline)
+        ?? (k.kind === 'contract' ? missedNoticeText(await this.repo.getNotice(CONTRACT_ID), c.clock.today) : null),
+      autoRenewResult: autoRenewResultText(k.kind, item.status, k.amount, item.effectiveDeadline),
       adjustments: adjustmentsFrom(events),
       returnHints: this.hints(item, c.intake.find((r) => r.제안ID === id)!, await this.getConfig()),
       returnState: await this.returnState(c, id, item.effectiveDeadline),
@@ -492,7 +534,9 @@ export class IntakeService {
       label: item.checkLabel,
       lines: [
         `① ${ROUTE_LABEL[item.routeLevel]} 승인 필요 — ${route.reasons.join(' / ')}${item.provisional ? ' (잠정)' : ''}`,
-        `② 실효 결정 기한 ${item.effectiveDeadline}, 남은 ${item.daysLeft}일. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
+        TERMINAL.has(item.status)
+          ? `② 실효 결정 기한 ${item.effectiveDeadline}(${daysLeftText(item.daysLeft)}). 이 건은 이미 끝났습니다.`
+          : `② 실효 결정 기한 ${item.effectiveDeadline}, ${daysLeftText(item.daysLeft)}. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
         `③ ${unit} 성과 명목 ROAS ${f2(nominal)} vs 실질 ROAS ${f2(real)}${real !== null && real < 0 ? '(광고비를 빼면 손해)' : ''}; 반품 원인 분리 보기[가정: 오배송·불량은 인플루언서 책임이 아님] 실질 ${f2(realD)}${stillLoss === true ? '(여전히 손실, 회사 손익은 그대로)' : ''}; ${gap.lines.join(', ')}${gap.needsFinanceCheck ? ' → 재무 확인 필요' : ''}`,
         `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}${item.checkLabel === 'finance_pending' ? ' — 점검은 통과했어요. 재무팀이 같은 점검표로 금액을 확인한 뒤 상신할 수 있어요.' : ''}`,
       ],
@@ -522,6 +566,11 @@ export class IntakeService {
     const c = await this.compute();
     const st = await this.requireState(id);
     const next = transition(st, action, actor, { today: c.clock.today, hold: opts.hold });
+    if (action === 'hold' && opts.hold) {
+      // 답변 기한이 결정 기한 뒤면, 답을 받기 전에 자동 확정된다. 결정 당일까지는 허용한다.
+      const deadline = c.cases.find((x) => x.id === id)!.effectiveDeadline;
+      if (opts.hold.dueDate > deadline) throw new Error(`HOLD_AFTER_DEADLINE: 보류 답변 기한 ${opts.hold.dueDate}이 결정 기한 ${deadline}보다 늦습니다. 기한을 ${deadline} 이전으로 정하세요`);
+    }
     const level = opts.rejudge ? c.routes.get(id)!.level : st.routeLevel;
     const ok = await this.repo.transitionState(id, st.status, { status: next, routeLevel: level, updatedBusinessDate: c.clock.today });
     if (!ok) throw new Error(`INVALID_TRANSITION: ${id}: 방금 다른 요청으로 이미 처리되었습니다(${action})`);
@@ -621,7 +670,13 @@ export class IntakeService {
     }
     await this.sweepReview();
   }
-  async close(id: string, actor: Actor): Promise<void> { await this.act(id, actor, 'close'); }
+  async close(id: string, actor: Actor): Promise<void> {
+    if (id === CONTRACT_ID) {
+      const n = await this.repo.getNotice(CONTRACT_ID);
+      if (n && n.required && n.status === 'open') throw new Error(`NOTICE_REQUIRED_OPEN: 필수 ${n.kind === 'terminate' ? '해지' : '변경'} 통보를 보내야 종결할 수 있습니다(마감 ${n.dueDate})`);
+    }
+    await this.act(id, actor, 'close');
+  }
 
   async decide(id: string, actor: Actor, decision: Decision): Promise<void> {
     if (typeof decision !== 'string' && 'reject' in decision) requireReason(decision.reject.reason);

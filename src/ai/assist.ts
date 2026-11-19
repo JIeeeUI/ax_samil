@@ -97,6 +97,11 @@ ${list}`;
 /** 빠진 정보 문장: 점검 결과 ④줄(서버 사실)에서 가져온다. */
 const missingText = (d: CaseDetail): string => d.check.lines[3].replace(/^④\s*/, '').split(' — ')[0];
 
+/** 결정 기한까지의 일수 표기. 기한이 지난 건에 "남은 -1일"이 나오지 않게 한다. */
+export function daysLeftText(daysLeft: number): string {
+  return daysLeft < 0 ? `${-daysLeft}일 지남` : daysLeft === 0 ? '오늘이 기한' : `남은 ${daysLeft}일`;
+}
+
 function summarySpec(d: CaseDetail): SlotSpec {
   const i = d.item;
   const values: Record<string, string> = {
@@ -104,7 +109,7 @@ function summarySpec(d: CaseDetail): SlotSpec {
     요청액: won(i.amount),
     승인경로: i.routeLabel,
     근거: d.reasons.join(' / '),
-    결정기한: `${i.effectiveDeadline}(남은 ${i.daysLeft}일)`,
+    결정기한: `${i.effectiveDeadline}(${daysLeftText(i.daysLeft)})`,
     빠진정보: missingText(d),
   };
   const required = ['건', '요청액', '승인경로', '근거', '결정기한', '빠진정보'];
@@ -120,7 +125,7 @@ function templateSummary(d: CaseDetail): string {
   const parts = [
     `${i.influencer} ${i.id}(${i.kind === 'contract' ? '전속계약' : '기안'}): 요청액 ${won(i.amount)}${i.scale === '풀스케일' ? '(풀스케일 금액이라 표본 금액과 합산하지 않습니다)' : ''}.`,
     `승인 경로는 ${i.routeLabel}입니다. 근거: ${d.reasons.join(' / ')}.`,
-    `실효 결정 기한 ${i.effectiveDeadline}(남은 ${i.daysLeft}일).`,
+    `실효 결정 기한 ${i.effectiveDeadline}(${daysLeftText(i.daysLeft)}).`,
   ];
   if (d.row.과거실질ROAS !== '') {
     parts.push(`과거 실질 ROAS ${d.row.과거실질ROAS}(명목 ${d.row.과거명목ROAS})${i.realRank !== '' ? `, 실질 순위 ${i.realRank}위` : ''}.`);

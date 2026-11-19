@@ -96,7 +96,7 @@ export default function Requests() {
               )}
               {can && isContractDate && (
                 <>
-                  <form method="get" action="/requests" className="inline">
+                  <form method="get" action={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/requests/`} className="inline">
                     <input type="hidden" name="req" value={q.id} />
                     <label>답변 글에서 날짜 뽑아 보기 <input name="text" size={40} defaultValue={typed} placeholder="예: 지급일은 2026-08-10입니다" /></label>
                     <button type="submit" className="secondary">날짜 찾기</button>

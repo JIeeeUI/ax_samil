@@ -60,7 +60,7 @@ export default function Settings() {
       <section className="card-block">
         <h2>확장 기능(결재 이후) 보기</h2>
         <p>이 도구의 중심은 상신 전 점검입니다. 결재 이후 기능(재무 반려·마케팅 회신·통보 작업·1차/2차 결재·알림 계획표)은 구현돼 있지만 기본으로 숨겨져 있습니다. 켜면 화면에 나타납니다.</p>
-        <form action={actSetConfig} className="hold">{hidden}
+        <form key={`ext-${cfg.showExtended}`} action={actSetConfig} className="hold">{hidden}
           <label>확장 기능 보기 <select name="showExtended" defaultValue={cfg.showExtended ? 'on' : 'off'}><option value="off">끄기(기본)</option><option value="on">켜기</option></select></label>
           <button type="submit">저장</button>
         </form>
@@ -70,7 +70,7 @@ export default function Settings() {
       <section className="card-block">
         <h2>결재·알림 설정 <Badge tone="amber">가정</Badge></h2>
         <p>교육용으로 정한 값입니다. 기본은 “꺼짐 / 기본 알림”이고, 켜면 CEO/이사회 건에 1차 대표 검토가 추가됩니다. 알림은 모두 앱 안의 <strong>모의 알림</strong>입니다.</p>
-        <form action={actSetConfig} className="hold">{hidden}
+        <form key={`cfg-${cfg.twoStage}-${cfg.urgentDays}-${cfg.holdCapDays}-${cfg.alertPlan}`} action={actSetConfig} className="hold">{hidden}
           <label>1차/2차 결재 <select name="twoStage" defaultValue={cfg.twoStage ? 'on' : 'off'}><option value="off">끄기(기본, 1단계)</option><option value="on">켜기(대표 검토 → CEO 결정)</option></select></label>
           <label>긴급 기준(결정 기한 며칠 전부터) <input type="number" name="urgentDays" min={1} max={60} defaultValue={cfg.urgentDays} /></label>
           <label>1차 보류 상한(결정 기한 며칠 전까지) <input type="number" name="holdCapDays" min={0} max={30} defaultValue={cfg.holdCapDays} /></label>
@@ -94,7 +94,7 @@ export default function Settings() {
       <section className="card-block">
         <h2>재무 반려 사유·역산 일정 <Badge tone="amber">가정</Badge></h2>
         <p>재무팀이 마케팅에 되돌릴 때(반려) 고를 수 있는 사유입니다. 끄면 선택지에서 사라집니다.</p>
-        <form action={actSetReturnReasons} className="hold">{hidden}
+        <form key={`rr-${RETURN_REASONS.map((k) => (cfg.returnReasons[k] ? 1 : 0)).join('')}`} action={actSetReturnReasons} className="hold">{hidden}
           {RETURN_REASONS.map((k) => <label key={k}><input type="checkbox" name={`rr_${k}`} defaultChecked={cfg.returnReasons[k]} /> {RETURN_REASON_LABEL[k]}</label>)}
           <button type="submit">반려 사유 저장</button>
         </form>

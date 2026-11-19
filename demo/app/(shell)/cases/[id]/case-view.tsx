@@ -131,7 +131,8 @@ export function CaseView({ id }: { id: string }) {
         </details>
       ) : <p className="meta">{d.returnState.why}</p>)}
       {d.cashComparison.needsFinanceCheck && <CashNote lines={d.cashComparison.lines} unverified={d.cashComparison.unverified} />}
-      {d.noticeWarning && <div className="flash flash-error"><strong>통보 미완료 시 자동 갱신</strong> {d.noticeWarning}</div>}
+      {d.autoRenewResult && <div className="flash flash-error"><strong>자동 갱신된 것으로 처리됨</strong> {d.autoRenewResult}</div>}
+      {d.noticeWarning && <div className="flash flash-error"><strong>{d.noticeWarning.startsWith('필수 통보 기한 경과') ? '필수 통보 기한 경과' : '통보 미완료 시 자동 갱신'}</strong> {d.noticeWarning.replace(/^필수 통보 기한 경과: /, '')}</div>}
       {cfg.showExtended && d.notice && d.notice.status !== 'void' && (
         <section className="card-block">
           <h2>에이전시 통보 <small>(발송은 마케팅, 기록은 계약 담당 · 교육용 가정)</small></h2>

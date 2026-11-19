@@ -40,7 +40,7 @@ function recipientRole(e: EventRow, actor: string): Role | null {
     case 'reply': case 'reply_pending': return decider;
     case 'primary_escalate': case 'parallel_escalate': return 'ceo_board';
     case 'revision_unanswered': return decider;
-    case 'notice_created': return 'marketing';
+    case 'notice_created': case 'notice_missed': return 'marketing'; // 통보를 보내야 하는 쪽
     case 'notice_sent': return 'contract';
     default: return null;
   }

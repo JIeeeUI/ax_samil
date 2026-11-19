@@ -24,7 +24,7 @@ export const ACTION_LABEL: Record<string, string> = {
   reject: '거절', hold: '보류', reply: '회신 반영', reply_pending: '회신(값 없음, 보류 유지)', resubmit: '재상신', close: '종결',
   expire: '기한 경과', scenario_change: '시나리오 변경 재판정', propose_change: '계약 조건 변경 제안',
   finance_return: '재무 반려(보완 요청)', revision_adjust: '마케팅 조정', adjust: '마케팅 조정(집행일·요청액)', keep: '마케팅: 변경 없음', consult: '마케팅: 협의 필요',
-  notice_created: '에이전시 통보 작업 생성', notice_sent: '에이전시 통보 발송(모의)', notice_recorded: '통보·수령 기록(모의)', notice_void: '통보 작업 취소',
+  notice_created: '에이전시 통보 작업 생성', notice_sent: '에이전시 통보 발송(모의)', notice_recorded: '통보·수령 기록(모의)', notice_void: '통보 작업 취소', notice_missed: '필수 통보 기한 경과',
   revision_unanswered: '미응답(결재자에게 자동 전달)',
 };
 
