@@ -1,5 +1,5 @@
 import { THRESHOLDS } from '../engine/assumptions.js';
-import { formatMan } from '../format.js';
+import { daysLeftText, formatMan } from '../format.js';
 import { isIsoDate } from '../engine/calendar.js';
 import type { IsoDate } from '../engine/types.js';
 import type { CaseDetail, ReplyValues } from '../app/service.js';
@@ -96,11 +96,6 @@ ${list}`;
 
 /** 빠진 정보 문장: 점검 결과 ④줄(서버 사실)에서 가져온다. */
 const missingText = (d: CaseDetail): string => d.check.lines[3].replace(/^④\s*/, '').split(' — ')[0];
-
-/** 결정 기한까지의 일수 표기. 기한이 지난 건에 "남은 -1일"이 나오지 않게 한다. */
-export function daysLeftText(daysLeft: number): string {
-  return daysLeft < 0 ? `${-daysLeft}일 지남` : daysLeft === 0 ? '오늘이 기한' : `남은 ${daysLeft}일`;
-}
 
 function summarySpec(d: CaseDetail): SlotSpec {
   const i = d.item;

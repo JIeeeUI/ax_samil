@@ -7,7 +7,7 @@ import { cashComparison, type CashComparison } from '../engine/cashGap.js';
 import { historyEntry, type HistoryEntry } from './history.js';
 import { buildAttention, type Attention } from '../workflow/attention.js';
 import { terminationPenalty } from '../engine/contract.js';
-import { daysLeftText } from '../ai/assist.js';
+import { daysLeftText } from '../format.js';
 import { buildIntake, type IntakeRow } from '../engine/intake.js';
 import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/routing.js';
 import type { DataRoom, IsoDate } from '../engine/types.js';
@@ -93,6 +93,8 @@ export interface CaseDetail {
   notice: NoticeRow | null;
   /** 아직 결정 전인 계약이 통보 없이 기한을 넘기면 자동 갱신된다는 경고 */
   noticeWarning: string | null;
+  /** noticeWarning이 "기한 전 자동 갱신 경고"가 아니라 "필수 통보 기한 경과"일 때 true. 화면이 제목을 고르는 데 쓴다 */
+  noticeWarningMissed: boolean;
   /** 결정 없이 기한이 지나 자동 확정된 계약의 결과(갱신 기간·고정 피·위약금). 그 외에는 null */
   autoRenewResult: string | null;
   /** 엔진 결과로 미리 체크해 둘 반려 사유(설정에서 켜 둔 것만) */
@@ -143,16 +145,26 @@ const manWon = (krw: number) => `${Math.round(krw / 10_000).toLocaleString('ko-K
 
 /** 마감일이 지났는데 필수 통보가 아직 열려 있을 때의 경고(승인·종결 상태 포함). */
 function missedNoticeText(n: NoticeRow | null, today: IsoDate): string | null {
-  if (!n || !n.required || n.status !== 'open' || today <= n.dueDate) return null;
+  if (!n || !n.required) return null;
   const what = n.kind === 'terminate' ? '해지' : '변경';
-  return `필수 통보 기한 경과: ${what} 통보를 ${n.dueDate}까지 보내지 않았습니다. 통보하지 않으면 현재 조건으로 자동 갱신된 것으로 봅니다.`;
+  if (n.status === 'open') {
+    return today > n.dueDate ? `${what} 통보를 ${n.dueDate}까지 보내지 않았습니다. 통보하지 않으면 현재 조건으로 자동 갱신된 것으로 봅니다.` : null;
+  }
+  // 마감 뒤에 보낸 통보는 이행으로 보지 않고, 늦었다는 사실을 남긴다(기한 안 발송 여부는 noticeSentInTime과 같은 기준).
+  if ((n.status === 'sent' || n.status === 'done') && n.sentDate && !noticeSentInTime(n)) {
+    return `${what} 통보를 ${n.sentDate}에 보냈지만 마감 ${n.dueDate}이 지났습니다. 마감 안에 통보하지 못해 현재 조건으로 자동 갱신된 것으로 볼 수 있습니다.`;
+  }
+  return null;
 }
 
 /** 결정 없이 기한이 지나 자동 확정된 계약에 보여 줄 결과(갱신 기간·고정 피·위약금). 위약금은 통보서 조건이며 계약 원문은 확인되지 않았다. */
-function autoRenewResultText(kind: string, status: Status, amount: number, effectiveDeadline: IsoDate): string | null {
+function autoRenewResultText(kind: string, status: Status, proposedAmount: number, effectiveDeadline: IsoDate): string | null {
   if (kind !== 'contract' || status !== 'overdue') return null;
+  // 자동 갱신은 통보서의 현재 조건으로 이뤄진다. 제안만 하고 승인하지 않은 조건(proposedAmount)은 갱신 조건이 아니다.
+  const amount = INF001_CONTRACT.annualFixedFeeKrw;
   const penalty = terminationPenalty(amount, '2026-09-01');
-  return `결정·통보 기한 ${effectiveDeadline}이 지나 현재 조건으로 자동 갱신된 것으로 봅니다. 연 ${manWon(amount)}의 고정 피가 1년간 이어지고, 갱신 직후 해지하면 위약금 ${manWon(penalty)}(남은 고정 피의 50%)이 붙을 수 있습니다. 통보서 조건이며 계약 원문은 확인되지 않았습니다.`;
+  const note = proposedAmount !== amount ? ` 제안했던 연 ${manWon(proposedAmount)}은 승인되지 않아 적용되지 않습니다.` : '';
+  return `결정·통보 기한 ${effectiveDeadline}이 지나 현재 조건으로 자동 갱신된 것으로 봅니다. 연 ${manWon(amount)}의 고정 피가 1년간 이어지고, 갱신 직후 해지하면 위약금 ${manWon(penalty)}(남은 고정 피의 50%)이 붙을 수 있습니다. 통보서 조건이며 계약 원문은 확인되지 않았습니다.${note}`;
 }
 
 function requireReason(reason: string | undefined): void {
@@ -340,6 +352,14 @@ export class IntakeService {
     return raised;
   }
 
+  /** 계약 건의 통보 경고: 기한 전이면 자동 갱신 경고, 기한이 지났는데 필수 통보가 열려 있으면 기한 경과 경고. */
+  private async noticeWarnings(kind: string, item: { status: Status; daysLeft: number; effectiveDeadline: IsoDate }, today: IsoDate): Promise<{ noticeWarning: string | null; noticeWarningMissed: boolean }> {
+    const before = autoRenewText(kind, item.status, item.daysLeft, item.effectiveDeadline);
+    if (before) return { noticeWarning: before, noticeWarningMissed: false };
+    const missed = kind === 'contract' ? missedNoticeText(await this.repo.getNotice(CONTRACT_ID), today) : null;
+    return { noticeWarning: missed, noticeWarningMissed: missed !== null };
+  }
+
   /**
    * 필수 통보(해지·변경)를 마감일까지 보내지 않았다면 알림과 기록을 한 번만 남긴다.
    * 승인·종결 같은 끝난 상태에서도 외부 통보는 끝나지 않았으므로 기한 감시에서 빼지 않는다.
@@ -480,8 +500,7 @@ export class IntakeService {
       check: this.checkResult(c, item, route, k.kind === 'contract', await this.repo.listInfoRequests({ caseId: id, status: 'requested' })),
       revisions: await this.repo.listRevisions(id),
       notice: k.kind === 'contract' ? await this.repo.getNotice(id) : null,
-      noticeWarning: autoRenewText(k.kind, item.status, item.daysLeft, item.effectiveDeadline)
-        ?? (k.kind === 'contract' ? missedNoticeText(await this.repo.getNotice(CONTRACT_ID), c.clock.today) : null),
+      ...(await this.noticeWarnings(k.kind, item, c.clock.today)),
       autoRenewResult: autoRenewResultText(k.kind, item.status, k.amount, item.effectiveDeadline),
       adjustments: adjustmentsFrom(events),
       returnHints: this.hints(item, c.intake.find((r) => r.제안ID === id)!, await this.getConfig()),

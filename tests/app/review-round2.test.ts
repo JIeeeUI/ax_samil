@@ -94,8 +94,8 @@ describe('N2: a required notice that missed its deadline is never hidden', () =>
     await svc.advanceClock('2026-07-18');
     let d = await svc.getCase(C);
     expect(d.item.status).toBe('approved');
-    expect(d.noticeWarning).toMatch(/필수 통보/);
-    expect(d.noticeWarning).toMatch(/2026-07-17/);
+    expect(d.noticeWarning).toMatch(/변경 통보를 2026-07-17까지 보내지 않았습니다/);
+    expect(d.noticeWarningMissed).toBe(true);
     expect(d.alerts.filter((a) => a.kind === 'notice_missed')).toHaveLength(1);
     await svc.advanceClock('2026-07-19'); // 다시 돌려도 중복 알림은 없다
     d = await svc.getCase(C);
@@ -170,5 +170,77 @@ describe('N2 (history): the missed-notice record is readable and addressed', () 
     expect(entry!.to?.role).toBe('marketing');
     const { ACTION_LABEL } = await import('../../app/components.js');
     expect(ACTION_LABEL['notice_missed']).toBe('필수 통보 기한 경과');
+  });
+});
+
+describe('C2 (accuracy): the renewal result states the terms that actually renew', () => {
+  test('a proposed-but-unapproved fee change does not replace the original terms in the renewal result', async () => {
+    const svc = await make();
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 900_000_000 });
+    await svc.advanceClock('2026-07-18');
+    const d = await svc.getCase(C);
+    expect(d.item.status).toBe('overdue');
+    // 통보서의 현재 조건은 연 28억 원이다. 제안만 하고 승인하지 않았으므로 갱신 조건은 바뀌지 않는다.
+    expect(d.autoRenewResult).toMatch(/280,000만 원/);
+    expect(d.autoRenewResult).toMatch(/140,000만 원/);
+    // 제안했던 금액은 '적용되지 않는 조건'으로만 언급된다(갱신 금액으로 읽히면 안 된다).
+    expect(d.autoRenewResult).toMatch(/제안했던 연 90,000만 원은 승인되지 않아 적용되지 않습니다/);
+    expect(d.autoRenewResult).not.toMatch(/연 90,000만 원의 고정 피/);
+  });
+});
+
+describe('N2 (structure): the missed/pending distinction is a field, not a text prefix', () => {
+  test('noticeWarningMissed is false for the pre-deadline warning and true only after a missed required notice', async () => {
+    const svc = await make();
+    await svc.advanceClock('2026-07-14');
+    let d = await svc.getCase(C);
+    expect(d.noticeWarning).toMatch(/자동 갱신/);
+    expect(d.noticeWarningMissed).toBe(false); // 아직 기한 전: "통보 미완료 시 자동 갱신" 경고
+    const approved = await make();
+    await approveChangedContract(approved);
+    await approved.advanceClock('2026-07-18');
+    d = await approved.getCase(C);
+    expect(d.noticeWarning).toMatch(/변경 통보/);
+    expect(d.noticeWarningMissed).toBe(true);
+    const none = await make();
+    expect((await none.getCase(C)).noticeWarningMissed).toBe(false);
+  });
+});
+
+describe('N2 (late): a notice sent after its due date is shown as late, not as fulfilled', () => {
+  test('sent on 7/18 for a 7/17 due date keeps a "late" warning and is not treated as in time', async () => {
+    const svc = await make();
+    await approveChangedContract(svc);
+    await svc.advanceClock('2026-07-18');
+    await svc.sendNotice(C, 'marketing', { kind: 'change', sentDate: '2026-07-18' });
+    const d = await svc.getCase(C);
+    expect(d.notice).toMatchObject({ status: 'sent', sentDate: '2026-07-18', dueDate: '2026-07-17' });
+    expect(d.noticeWarningMissed).toBe(true);
+    expect(d.noticeWarning).toMatch(/변경 통보를 2026-07-18에 보냈지만 마감 2026-07-17이 지났습니다/);
+  });
+
+  test('sent in time keeps no warning (regression guard for the late rule)', async () => {
+    const svc = await make();
+    await approveChangedContract(svc);
+    await svc.sendNotice(C, 'marketing', { kind: 'change', sentDate: '2026-07-01' });
+    await svc.advanceClock('2026-07-18');
+    const d = await svc.getCase(C);
+    expect(d.noticeWarning).toBeNull();
+    expect(d.noticeWarningMissed).toBe(false);
+  });
+});
+
+describe('N1 (primary return): the first-stage return creates the same termination notice and the same rule applies', () => {
+  test('a primary return followed by an in-time termination notice does not expire into renewal', async () => {
+    const svc = await make();
+    await svc.setConfig({ twoStage: true });
+    await toSubmitted(svc);
+    await svc.primaryReturn(C, 'masil_ceo', '1차에서 반려');
+    expect((await svc.getCase(C)).notice).toMatchObject({ kind: 'terminate', required: true, status: 'open' });
+    await svc.sendNotice(C, 'marketing', { kind: 'terminate', sentDate: '2026-07-01' });
+    await svc.advanceClock('2026-07-18');
+    const d = await svc.getCase(C);
+    expect(d.item.status).not.toBe('overdue');
+    expect(d.events.filter((e) => e.action === 'expire')).toHaveLength(0);
   });
 });

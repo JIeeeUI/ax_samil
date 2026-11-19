@@ -21,3 +21,8 @@ export function formatClock(iso: string): string {
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
   return `${get('hour')}:${get('minute')}`;
 }
+
+/** 결정 기한까지의 일수 표기. 기한이 지난 건에 "남은 -1일"이 나오지 않게 한다. */
+export function daysLeftText(daysLeft: number): string {
+  return daysLeft < 0 ? `${-daysLeft}일 지남` : daysLeft === 0 ? '오늘이 기한' : `남은 ${daysLeft}일`;
+}
