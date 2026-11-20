@@ -77,12 +77,16 @@ export const THRESHOLDS = {
   contractAnnualKrw: 1_000_000_000,
   covenantMinKrw: 3_000_000_000,
   returnIssuePp: 3,
+  returnWarnMinPp: 0.5,
   minOrders: 100,
+  /** 입력 오류 방지용 상한 [가정]: 전속계약 고정 피 연 1,000억 원(Masil 연매출 약 1,800억 원의 절반 이상), 시계는 업무 기준일 + 365일 */
+  maxAnnualFixedFeeKrw: 100_000_000_000,
+  maxClockJumpDays: 365,
   alertDays: [14, 7, 3] as const,
   boardDate: '2026-07-06' as IsoDate,
   labels: {
     perItemKrw: 'confirmed', planTotalKrw: 'confirmed', contractAnnualKrw: 'confirmed',
-    covenantMinKrw: 'confirmed', returnIssuePp: 'assumption', minOrders: 'assumption',
-    alertDays: 'assumption', boardDate: 'confirmed',
+    covenantMinKrw: 'confirmed', returnIssuePp: 'assumption', returnWarnMinPp: 'assumption', minOrders: 'assumption',
+    alertDays: 'assumption', boardDate: 'confirmed', maxAnnualFixedFeeKrw: 'assumption', maxClockJumpDays: 'assumption',
   } satisfies Record<string, Label>,
 } as const;

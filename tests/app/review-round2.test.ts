@@ -244,3 +244,95 @@ describe('N1 (primary return): the first-stage return creates the same terminati
     expect(d.events.filter((e) => e.action === 'expire')).toHaveLength(0);
   });
 });
+
+describe('N5: a finished contract no longer shows a first-stage review that is still "waiting"', () => {
+  test('two-stage on, contract expires → no live review panel and the history keeps the trail', async () => {
+    const svc = await make();
+    await svc.setConfig({ twoStage: true, showExtended: true });
+    await toSubmitted(svc);
+    await svc.decide(C, 'ceo_board', { hold: { needed: '고정 피 지급일', ownerRole: 'finance', dueDate: '2026-07-10' } }).catch(() => undefined);
+    const before = await svc.getCase(C);
+    expect(before.review).not.toBeNull(); // 진행 중에는 1차 검토 안내가 보인다
+    await svc.advanceClock('2026-07-18');
+    const d = await svc.getCase(C);
+    expect(d.item.status).toBe('overdue');
+    expect(d.review).toBeNull();          // 끝난 건에는 "검토 대기" 같은 미래 진행 안내를 내보내지 않는다
+    expect(d.history.some((h) => h.action === 'expire')).toBe(true); // 중단 사실은 처리 기록에 남아 있다
+  });
+
+  test('a finished plan with two-stage on also has no live review panel', async () => {
+    const svc = await make();
+    await svc.setConfig({ twoStage: true });
+    await svc.advanceClock('2026-07-18');
+    expect((await svc.getCase('PLAN-001')).review).toBeNull();
+  });
+});
+
+describe('wording: the check line and the missing-opinion error say what they mean', () => {
+  test('a finance_pending check line never reads as "the case passed"', async () => {
+    const svc = await make();
+    const d = await svc.getCase('PLAN-001');
+    const text = JSON.stringify(d.check);
+    expect(text).not.toMatch(/점검은 통과/);
+    expect(text).toMatch(/필수 정보는 모두 있습니다/);
+    expect(text).toMatch(/손익 판단은 재무팀이/);
+  });
+
+  test('an empty opinion tells the user to enter one, then explains why', async () => {
+    const svc = await make();
+    await svc.advanceClock('2026-07-14'); // 결정 기한 5일 이하라 의견이 필수
+    await expect(svc.confirmFinance('PLAN-001', 'finance', { opinion: '' })).rejects.toThrow(/OPINION_REQUIRED: 재무 의견을 입력해야 합니다.*5일 이하/);
+    await expect(svc.confirmFinance('PLAN-001', 'finance', { opinion: '   ' })).rejects.toThrow(/OPINION_REQUIRED: 재무 의견을 입력해야 합니다/);
+  });
+});
+
+describe('escalation options depend on the kind of case', () => {
+  test('a contract may be changed or terminated; a campaign request can only be submitted and approved', async () => {
+    const { escalationOptionsFor } = await import('../../src/workflow/guard.js');
+    expect(escalationOptionsFor('contract')).toEqual(['change_terms_notice', 'termination_notice', 'submit_then_approve']);
+    expect(escalationOptionsFor('plan')).toEqual(['submit_then_approve']);
+  });
+
+  test('the escalation shown on a plan and the stored alert payload list only the applicable options', async () => {
+    const svc = await make();
+    await svc.advanceClock('2026-07-14');
+    const plan = await svc.getCase('PLAN-001');
+    expect(plan.escalation).toEqual(['submit_then_approve']);
+    const stored = plan.alerts.find((a) => a.kind === 'escalation');
+    expect((stored!.payload as { options: string[] }).options).toEqual(['submit_then_approve']);
+    const contract = await svc.getCase(C);
+    expect(contract.escalation).toEqual(['change_terms_notice', 'termination_notice', 'submit_then_approve']);
+  });
+});
+
+describe('input bounds: absurd values are refused with a clear reason', () => {
+  test('a fixed fee above the sanity cap is refused; the cap itself and normal values are accepted', async () => {
+    const svc = await make();
+    // 상한은 연 1,000억 원(100_000_000_000). 앞서 공개 사이트에서 받아들여지던 1조 원과 약 100조 원은 거절되어야 한다.
+    await expect(svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 100_000_000_001 })).rejects.toThrow(/INVALID_REPLY: 고정 피가 상한/);
+    await expect(svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 1_000_000_000_000 })).rejects.toThrow(/INVALID_REPLY: 고정 피가 상한/);
+    await expect(svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 99_999_999_999_999 })).rejects.toThrow(/INVALID_REPLY: 고정 피가 상한/);
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 100_000_000_000 }); // 상한 자체는 허용
+    await svc.proposeContractChange({ actor: 'contract', annualFixedFeeKrw: 1_800_000_000 });
+    expect((await svc.getCase(C)).item.amount).toBe(1_800_000_000);
+  });
+
+  test('the clock cannot jump more than a year past the business date', async () => {
+    const svc = await make();
+    await expect(svc.advanceClock('2099-01-01')).rejects.toThrow(/CLOCK_TOO_FAR/);
+    await expect(svc.advanceClock('2027-07-02')).rejects.toThrow(/CLOCK_TOO_FAR/);
+    await svc.advanceClock('2027-07-01'); // 기준일 + 365일까지는 허용
+    expect((await svc.getClock()).today).toBe('2027-07-01');
+  });
+});
+
+describe('input bounds: the reply path cannot be used to bypass the fixed-fee cap', () => {
+  test('a reply may not carry a fixed fee at all, so the cap cannot be sidestepped', async () => {
+    const svc = await make();
+    await toSubmitted(svc);
+    await svc.decide(C, 'ceo_board', { hold: { needed: 'cash_outflow_date', ownerRole: 'finance', dueDate: '2026-07-10' } });
+    const req = (await svc.getCase(C)).requests.find((q) => q.needed === 'cash_outflow_date' && q.status === 'requested')!;
+    await expect(svc.replyInfoRequest(req.id, { actor: 'finance', text: '고정 피를 올림', values: { annualFixedFeeKrw: 99_999_999_999_999 }, simulated: true }))
+      .rejects.toThrow(/INVALID_REPLY/);
+  });
+});

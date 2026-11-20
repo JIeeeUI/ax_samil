@@ -51,7 +51,7 @@ export function evaluateIssues(input: {
     const bench = channelBenchmark[c.salesChannelType];
     if (c.returnRate !== null && bench !== undefined) {
       const gap = c.returnRate * 100 - bench;
-      if (gap > 0) {
+      if (gap > THRESHOLDS.returnWarnMinPp) {
         const code = gap > THRESHOLDS.returnIssuePp ? 'RETURN_RATE_ISSUE' : 'RETURN_RATE_WARN';
         out.push({ targetType: 'campaign', targetId: id, code, severity: code === 'RETURN_RATE_ISSUE' ? 'issue' : 'warn', label: 'benchmark',
           evidence: `반품률 ${pct(c.returnRate)} (${c.salesChannelType} 기준 ${bench.toFixed(1)}%, +${gap.toFixed(1)}%p)` });

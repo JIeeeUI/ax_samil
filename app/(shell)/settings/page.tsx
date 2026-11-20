@@ -19,6 +19,15 @@ const FIELD_KO: Record<string, string> = {
   returnAttribution: '반품을 인플루언서 성과에 반영하는 범위', unitsPerOrder: '주문 1건당 판매 수량', channelFeeBasis: '판매 채널 수수료 기준', recoverCostOnRefund: '환불되면 원가·수수료를 돌려받는지',
   calcMode: '이익 계산 방식', overdueAr: '기준일 전 연체 외상매출', overdueAp: '기준일 전 연체 외상매입', lc0001TermsDays: 'LC-0001 대금 회수일(일)',
 };
+const VALUE_KO: Record<string, Record<string, string>> = {
+  returnAttribution: { all: '반품 전체', demandOnly: '수요 사유 반품만' },
+  channelFeeBasis: { gmv: '결제 금액(GMV) 기준', net: '순매출 기준' },
+  recoverCostOnRefund: { true: '돌려받음', false: '돌려받지 않음' },
+  calcMode: { a05: 'A05 기준(이중 차감 없음)', 'literal-calc-def': '정의서 글자 그대로(검증용)' },
+  overdueAr: { asof: '기준일에 회수', exclude: '제외' },
+  overdueAp: { asof: '기준일에 지급', exclude: '제외' },
+};
+const fieldValue = (k: string, v: unknown) => VALUE_KO[k]?.[String(v)] ?? (k === 'lc0001TermsDays' ? `${v}일` : k === 'unitsPerOrder' ? `${v}개` : String(v));
 const THRESHOLD_KO: Record<string, string> = {
   perItemKrw: '건별 승인 한도(원)', planTotalKrw: '기안 총액 한도(원)', contractAnnualKrw: '전속계약 연 한도(원)',
   covenantMinKrw: '지켜야 하는 최소 현금(원)', returnIssuePp: '반품률이 기준보다 몇 %p 높으면 문제로 볼지', minOrders: '판단하려면 필요한 최소 주문 수',
@@ -126,7 +135,7 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         <h3>가정 <small>{a.id} · 버전 {a.version}</small></h3>
         <table><thead><tr><th>항목</th><th>값</th><th>출처</th></tr></thead><tbody>
           {Object.entries(FIELD_KO).map(([k, name]) => (
-            <tr key={k}><td>{name}</td><td>{String((a as unknown as Record<string, unknown>)[k])}</td>
+            <tr key={k}><td>{name}</td><td>{fieldValue(k, (a as unknown as Record<string, unknown>)[k])}</td>
               <td><Badge tone={a.labels[k as keyof typeof a.labels] === 'confirmed' ? 'green' : 'amber'}>{LABEL_KO[a.labels[k as keyof typeof a.labels]]}</Badge></td></tr>
           ))}
         </tbody></table>

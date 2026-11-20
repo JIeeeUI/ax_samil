@@ -21,6 +21,11 @@ export function stagesDue(today: IsoDate, effectiveDeadline: IsoDate): Stage[] {
 /** D-3 이후 결재자에게 제시하는 선택지 (조건 변경 통보 / 해지 통보 / 상신 후 승인) */
 export const ESCALATION_OPTIONS = ['change_terms_notice', 'termination_notice', 'submit_then_approve'] as const;
 
+/** 건 종류별 선택지: 조건 변경·해지 통보는 계약에만 의미가 있다. 캠페인 기안은 상신 후 승인만 고를 수 있다. */
+export function escalationOptionsFor(kind: 'contract' | 'plan'): readonly (typeof ESCALATION_OPTIONS)[number][] {
+  return kind === 'contract' ? ESCALATION_OPTIONS : ['submit_then_approve'];
+}
+
 const UNDECIDED: ReadonlySet<Status> = new Set<Status>(['finance_review', 'routed', 'submitted', 'on_hold', 'revision', 'consulting']);
 
 /** 결정 전 상태면 D-3 이후 상위 결재자에게 올린다. */

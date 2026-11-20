@@ -13,7 +13,7 @@ import { ROUTE_LABEL, routeCase, type Route, type RouteLevel } from '../engine/r
 import type { DataRoom, IsoDate } from '../engine/types.js';
 import type { AlertRow, Clock, EventRow, InfoRequestRow, NoticeRow, Repo, RevisionRow, ReviewRow } from '../store/repo.js';
 import { ALERT_PLANS, MESSAGE_TEXT, recipientsFor, type AlertPlanId } from '../workflow/alertPlan.js';
-import { ESCALATION_OPTIONS, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
+import { escalationOptionsFor, linkWarnings, needsEscalation, stagesDue, type LinkWarning } from '../workflow/guard.js';
 import { SCHEDULE, canReturn, isReturnReason, returnDueDate, RETURN_REASONS, type ReturnReason } from '../workflow/schedule.js';
 import { computeCampaignPerformance, computeInfluencerPerformance } from '../engine/performance.js';
 import { canChangeContract, canReply, defaultOwnerFor, neededKo, replyKeysFor } from '../workflow/ownership.js';
@@ -134,6 +134,12 @@ function checkLabelFor(status: Status, hasOpenRequest: boolean, missingInfo: boo
 function autoRenewText(kind: string, status: Status, daysLeft: number, effectiveDeadline: IsoDate): string | null {
   return kind === 'contract' && needsEscalation(status) && daysLeft <= 3 && daysLeft >= 0
     ? `통보 미완료 시 자동 갱신: 결정 기한 ${effectiveDeadline}까지 결정하고 통보하지 않으면 현재 조건으로 자동 갱신됩니다.` : null;
+}
+
+/** 고정 피(원) 입력 검증: 양의 정수이고 입력 오류 방지 상한 이하여야 한다. */
+function assertFixedFee(krw: unknown): asserts krw is number {
+  if (typeof krw !== 'number' || !Number.isInteger(krw) || krw <= 0) throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
+  if (krw > THRESHOLDS.maxAnnualFixedFeeKrw) throw new Error(`INVALID_REPLY: 고정 피가 상한(${manWon(THRESHOLDS.maxAnnualFixedFeeKrw)})을 넘습니다. 원 단위로 입력했는지 확인하세요(예: 18억 원 = 1800000000)`);
 }
 
 /** 필수 통보를 마감일(포함)까지 보냈는지. 수령 증빙 여부는 따로 안내하고, 발송 사실 자체를 기한 이행으로 본다 [교육용 가정]. */
@@ -315,6 +321,7 @@ export class IntakeService {
   async advanceClock(to: IsoDate): Promise<{ raised: Raised[] }> {
     if (!isIsoDate(to)) throw new Error(`INVALID_DATE: ${String(to)}`);
     const clock = await this.getClock();
+    if (daysBetween(clock.asOf, to) > THRESHOLDS.maxClockJumpDays) throw new Error(`CLOCK_TOO_FAR: 업무 시계는 기준일 ${clock.asOf}에서 ${THRESHOLDS.maxClockJumpDays}일(${addDays(clock.asOf, THRESHOLDS.maxClockJumpDays)})까지만 옮길 수 있습니다`);
     if (to < clock.today) throw new Error(`CLOCK_BACKWARDS: 업무 시계는 ${clock.today}에서 ${to}로 되돌릴 수 없습니다`);
     // 같은 날 재호출도 가드를 다시 돌린다(알림·기한 경과 처리는 멱등이라 중복되지 않고, 도중 실패한 날의 처리를 이어 준다).
     if (to !== clock.today) await this.repo.setClock({ ...clock, today: to });
@@ -492,7 +499,7 @@ export class IntakeService {
       group: c.cases.filter((x) => x.linkGroup === k.linkGroup).map((x) => ({ id: x.id, kind: x.kind, status: sm.get(x.id)!.status })),
       linkWarnings: linkWarnings(c.cases, new Map([...sm].map(([key, v]) => [key, v.status]))).filter((w) => w.influencerId === k.linkGroup),
       notes, penalty: k.kind === 'contract' ? terminationPenalty(k.amount, '2026-09-01') : null,
-      escalation: esc && !TERMINAL.has(item.status) ? ESCALATION_OPTIONS : null, alerts,
+      escalation: esc && !TERMINAL.has(item.status) ? escalationOptionsFor(k.kind) : null, alerts,
       review: await this.reviewView(c, id, sm.get(id)!.routeLevel),
       rejection: item.status === 'rejected' ? this.lastRejection(events) : null,
       cashComparison: cashComparison(this.room.full, c.a),
@@ -557,7 +564,7 @@ export class IntakeService {
           ? `② 실효 결정 기한 ${item.effectiveDeadline}(${daysLeftText(item.daysLeft)}). 이 건은 이미 끝났습니다.`
           : `② 실효 결정 기한 ${item.effectiveDeadline}, ${daysLeftText(item.daysLeft)}. 상신하면 되돌릴 수 없고 기한까지 결정이 없으면 자동 확정(또는 확정 전 집행)됩니다.`,
         `③ ${unit} 성과 명목 ROAS ${f2(nominal)} vs 실질 ROAS ${f2(real)}${real !== null && real < 0 ? '(광고비를 빼면 손해)' : ''}; 반품 원인 분리 보기[가정: 오배송·불량은 인플루언서 책임이 아님] 실질 ${f2(realD)}${stillLoss === true ? '(여전히 손실, 회사 손익은 그대로)' : ''}; ${gap.lines.join(', ')}${gap.needsFinanceCheck ? ' → 재무 확인 필요' : ''}`,
-        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}${item.checkLabel === 'finance_pending' ? ' — 점검은 통과했어요. 재무팀이 같은 점검표로 금액을 확인한 뒤 상신할 수 있어요.' : ''}`,
+        `④ ${missing.length === 0 ? '빠진 정보 없음' : '빠진 정보: ' + missing.map(ask).join('; ')}${item.checkLabel === 'finance_pending' ? ' — 필수 정보는 모두 있습니다. 손익 판단은 재무팀이 같은 점검표로 금액을 확인한 뒤 상신합니다.' : ''}`,
       ],
       evidence: {
         nominalRoas: nominal, realRoas: real, realRoasDemandOnly: realD,
@@ -605,7 +612,7 @@ export class IntakeService {
     if (st0.status === 'finance_review' && !opinion) {
       const c0 = await this.compute();
       const rs = await this.returnState(c0, id, c0.cases.find((k) => k.id === id)!.effectiveDeadline);
-      if (rs.opinionRequired) throw new Error(`OPINION_REQUIRED: ${rs.opinionNotice}`);
+      if (rs.opinionRequired) throw new Error(`OPINION_REQUIRED: 재무 의견을 입력해야 합니다. ${rs.opinionNotice}`);
     }
     const c = await this.act(id, actor, 'confirm_finance', { rejudge: true, ...(opinion ? { detail: { financeOpinion: opinion } } : {}) });
     await this.ensureInfoRequests(c, id, false);
@@ -806,7 +813,7 @@ export class IntakeService {
   /** 에이전시의 고정 피 조건 변경 제안(모의 입력). 계약 담당과 결재 역할만 입력한다. 현금 유출일은 확인 요청 회신으로만 바뀐다. */
   async proposeContractChange(input: { actor: Actor; annualFixedFeeKrw: number }): Promise<void> {
     if (!canChangeContract(input.actor)) throw new Error(`ROLE_NOT_ALLOWED: 계약 조건 변경은 계약 담당 또는 결재자만 입력할 수 있습니다(${input.actor})`);
-    if (!Number.isInteger(input.annualFixedFeeKrw) || input.annualFixedFeeKrw <= 0) throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
+    assertFixedFee(input.annualFixedFeeKrw);
     const st = await this.requireState(CONTRACT_ID);
     if (TERMINAL.has(st.status)) throw new Error(`CASE_CLOSED: ${CONTRACT_ID}: 현재 상태 ${st.status}`);
     const before = await this.compute();
@@ -841,9 +848,7 @@ export class IntakeService {
     const stray = given.filter((k) => !replyKeysFor(req.needed).includes(k));
     if (stray.length > 0) throw new Error(`INVALID_REPLY: "${req.needed}" 요청은 ${stray.join(', ')} 값을 받을 수 없습니다`);
     if (v.cashOutflowDate !== undefined && !isIsoDate(v.cashOutflowDate)) throw new Error('INVALID_REPLY: 현금 유출일이 날짜가 아닙니다');
-    if (v.annualFixedFeeKrw !== undefined && (!Number.isInteger(v.annualFixedFeeKrw) || v.annualFixedFeeKrw <= 0)) {
-      throw new Error('INVALID_REPLY: 고정 피는 양의 정수(원)여야 합니다');
-    }
+    if (v.annualFixedFeeKrw !== undefined) assertFixedFee(v.annualFixedFeeKrw);
     const hasValues = v.cashOutflowDate !== undefined || v.annualFixedFeeKrw !== undefined;
     // 값 없이는 완료할 수 없다: 필수 입력이 있는 요청은 resolved=true로도 값 없이 못 끝내고, 값이 없는 회신은 본문이 있어야 한다.
     if (!hasValues) {
@@ -937,7 +942,7 @@ export class IntakeService {
   }
 
   private async runPlan(
-    c: Computed, cfg: Config, activated: IsoDate, st: { caseId: string; status: string; routeLevel: string }, k: { effectiveDeadline: IsoDate },
+    c: Computed, cfg: Config, activated: IsoDate, st: { caseId: string; status: string; routeLevel: string }, k: { effectiveDeadline: IsoDate; kind: 'contract' | 'plan' },
   ): Promise<Raised[]> {
     const raised: Raised[] = [];
     const today = c.clock.today;
@@ -957,7 +962,7 @@ export class IntakeService {
       const payload = {
         recipients: recipientsFor(row, route, { ready, parallel: review?.parallel === true }),
         simulated: true, planId: plan.id, planVersion: plan.version, ready,
-        ...(kind === 'escalation' ? { options: [...ESCALATION_OPTIONS], message: MESSAGE_TEXT.escalation } : {}),
+        ...(kind === 'escalation' ? { options: [...escalationOptionsFor(k.kind)], message: MESSAGE_TEXT.escalation } : {}),
         ...(kind === 'escalation' && st.caseId === CONTRACT_ID ? { autoRenewWarning: '통보 미완료 시 자동 갱신' } : {}),
       };
       if (await this.repo.insertAlertIfAbsent({ caseId: st.caseId, stage, kind, businessDate: today, payload })) {
@@ -1037,6 +1042,10 @@ export class IntakeService {
   private async reviewView(c: Computed, caseId: string, route: RouteLevel): Promise<ReviewView | null> {
     const cfg = await this.getConfig();
     if (!cfg.twoStage || route !== 'CEO_BOARD') return null;
+    // 결정 없이 기한이 지나 끝났거나(overdue) 종결된(closed) 건에는 "검토 대기" 같은 앞으로의 진행 안내를 내보내지 않는다.
+    // 승인·거절로 결정된 건은 1차 결과(병행 결정 등)가 이력으로 의미가 있어 그대로 둔다. 중단 사실은 처리 기록(expire/close)에 남는다.
+    const status = (await this.requireState(caseId)).status;
+    if (status === 'overdue' || status === 'closed') return null;
     const rv = await this.reviewOrDefault(caseId);
     const eff = c.cases.find((x) => x.id === caseId)!.effectiveDeadline;
     const holdCapDate = addDays(eff, -cfg.holdCapDays);

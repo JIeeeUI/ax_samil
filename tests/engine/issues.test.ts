@@ -1,5 +1,5 @@
 import { loadDataRoom } from '../../src/engine/dataRoom.js';
-import { DEFAULT_ASSUMPTIONS } from '../../src/engine/assumptions.js';
+import { DEFAULT_ASSUMPTIONS, THRESHOLDS } from '../../src/engine/assumptions.js';
 import { computeCampaignPerformance, computeInfluencerPerformance } from '../../src/engine/performance.js';
 import { buildCases } from '../../src/engine/cases.js';
 import { evaluateIssues, channelReturnBenchmark, type IssueCode } from '../../src/engine/issues.js';
@@ -51,4 +51,17 @@ test('labels and evidence', () => {
   expect(issues.find((i) => i.code === 'RETURN_RATE_ISSUE')!.label).toBe('benchmark');
   expect(issues.find((i) => i.targetId === 'CMP-0014' && i.code === 'RETURN_RATE_ISSUE')!.evidence).toContain('9.0%');
   expect(issues.every((i) => i.evidence.length > 0)).toBe(true);
+});
+
+test('a return rate only marginally above the channel benchmark is not flagged', () => {
+  // CMP-0003은 채널 기준보다 0.029%p 높을 뿐이라 화면에는 같은 값으로 보인다. 경고하지 않는다.
+  const flagged = [...ids('RETURN_RATE_WARN'), ...ids('RETURN_RATE_ISSUE')];
+  expect(flagged).not.toContain('CMP-0003');
+  // 0.5%p 이상 높은 경우는 계속 주의로 남는다(CMP-0001은 0.913%p 높다).
+  expect(ids('RETURN_RATE_WARN')).toContain('CMP-0001');
+});
+
+test('the minimum gap is a labeled assumption', () => {
+  expect(THRESHOLDS.returnWarnMinPp).toBe(0.5);
+  expect(THRESHOLDS.labels.returnWarnMinPp).toBe('assumption');
 });
